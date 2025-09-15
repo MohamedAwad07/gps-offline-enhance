@@ -5,7 +5,6 @@ import 'package:permission_handler/permission_handler.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  requestLocationPermissions();
   await Permission.notification.isDenied.then((value) {
     if (value) {
       Permission.notification.request();
@@ -17,11 +16,6 @@ void main() async {
   );
 }
 
-Future<void> requestLocationPermissions() async {
-  await Permission.location.request();
-  await Permission.locationWhenInUse.request();
-  await Permission.locationAlways.request();
-}
 // class MyApp extends StatelessWidget {
 //   const MyApp({super.key});
 

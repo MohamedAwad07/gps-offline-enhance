@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -9,6 +10,30 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  Future<void> requestLocationPermissions() async {
+    await Permission.location.request();
+    await Permission.locationWhenInUse.request();
+    await Permission.locationAlways.request();
+  }
+
+  Future<void> requestIgnoreBatteryOptimizations() async {
+    await Permission.ignoreBatteryOptimizations.request();
+  }
+
+  @override
+  void initState() async {
+    super.initState();
+
+   Future.delayed(
+      const Duration(seconds: 3),
+      () => requestLocationPermissions(),
+    );
+     Future.delayed(
+      const Duration(seconds: 6),
+      () => requestIgnoreBatteryOptimizations(),
+    );
+  }
+
   String text = "stop service";
 
   @override
