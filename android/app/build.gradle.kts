@@ -42,7 +42,6 @@ android {
 dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
-    implementation("io.flutter:flutter_embedding_debug:1.0.0-${flutter.versionName}")
 }
 
 flutter {
