@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:learning/providers/barometric_altimeter_provider.dart';
 import 'package:learning/services/gps_altitude_service.dart';
@@ -81,133 +80,54 @@ class WeatherBarometricAltimeterService {
     }
   }
 
-  /// Get current pressure reading from weather service with offline fallbacks
+  /// Get current pressure reading from weather service
   static Future<double?> getCurrentPressure() async {
     try {
-      // Get current location first
+      final available = await isAvailable();
+      if (!available) return null;
+
+      // Get current location
       final location = await GPSAltitudeService.getCurrentLocation();
       if (location?.latitude == null || location?.longitude == null) {
-        // No GPS available - try cached pressure
-        final cachedPressure = getCachedPressure();
-        if (cachedPressure != null) {
-          _currentService = 'Cached Pressure (Offline)';
-          return cachedPressure;
-        }
-        _currentService = 'Default (1013.25 hPa)';
-        return 1013.25;
+        return null;
       }
 
-      // Try online services first
-      final available = await isAvailable();
-      if (available) {
-        // Try to get pressure from OpenWeatherMap
-        final pressure = await _getPressureFromOpenWeatherMap(
-          location!.latitude!,
-          location.longitude!,
-        );
+      // Try to get pressure from OpenWeatherMap
+      final pressure = await _getPressureFromOpenWeatherMap(
+        location!.latitude!,
+        location.longitude!,
+      );
 
-        if (pressure != null) {
-          _cachePressure(pressure); // Cache for offline use
-          _currentService = 'OpenWeatherMap';
-          return pressure;
-        }
-
-        // Fallback to Open-Meteo if OpenWeatherMap fails
-        final fallbackPressure = await _getPressureFromOpenMeteo(
-          location.latitude!,
-          location.longitude!,
-        );
-
-        if (fallbackPressure != null) {
-          _cachePressure(fallbackPressure); // Cache for offline use
-          _currentService = 'Open-Meteo';
-          return fallbackPressure;
-        }
+      if (pressure != null) {
+        _currentService = 'OpenWeatherMap';
+        return pressure;
       }
 
-      // OFFLINE FALLBACKS
+      // Fallback to Open-Meteo if OpenWeatherMap fails
+      final fallbackPressure = await _getPressureFromOpenMeteo(
+        location.latitude!,
+        location.longitude!,
+      );
 
-      // 1. Try cached pressure first
-      final cachedPressure = getCachedPressure();
-      if (cachedPressure != null) {
-        _currentService = 'Cached Pressure (Offline)';
-        return cachedPressure;
+      if (fallbackPressure != null) {
+        _currentService = 'Open-Meteo';
+        return fallbackPressure;
       }
 
-      // 2. Calculate pressure from GPS altitude
-      if (location?.altitude != null) {
-        final gpsPressure = calculateSeaLevelPressureFromGPS(
-          location!.altitude!,
-        );
-        _currentService = 'GPS-Based (Offline)';
-        return gpsPressure;
-      }
-
-      // 3. Use standard atmospheric model
-      final standardPressure = getStandardAtmosphericPressure(0); // Sea level
-      _currentService = 'Standard Atmosphere (Offline)';
-      return standardPressure;
-    } catch (e) {
       // Final fallback to standard sea level pressure
       _currentService = 'Default (1013.25 hPa)';
       return 1013.25;
+    } catch (e) {
+      _currentService = 'Default (1013.25 hPa)';
+      return 1013.25; // Fallback to standard sea level pressure
     }
   }
 
   static String _currentService = 'Unknown';
 
-  // Pressure caching for offline use
-  static double? _cachedPressure;
-  static DateTime? _cacheTime;
-  static const Duration _cacheValidity = Duration(hours: 6);
-
   /// Get the current weather service being used
   static String getCurrentService() {
     return _currentService;
-  }
-
-  /// Get cached pressure for offline use
-  static double? getCachedPressure() {
-    if (_cachedPressure == null || _cacheTime == null) return null;
-
-    final age = DateTime.now().difference(_cacheTime!);
-    if (age > _cacheValidity) return null;
-
-    // Apply time-based decay (pressure changes slowly over time)
-    final decayFactor = 1.0 - (age.inMinutes / _cacheValidity.inMinutes) * 0.1;
-    return _cachedPressure! * decayFactor;
-  }
-
-  /// Cache pressure for offline use
-  static void _cachePressure(double pressure) {
-    _cachedPressure = pressure;
-    _cacheTime = DateTime.now();
-  }
-
-  /// Calculate sea-level pressure from GPS altitude using standard atmospheric model
-  static double calculateSeaLevelPressureFromGPS(
-    double gpsAltitude, {
-    double temperature = 15.0,
-  }) {
-    const double standardSeaLevelPressure = 1013.25; // hPa
-    const double g = 9.80665; // m/s²
-    const double M = 0.0289644; // kg/mol
-    const double R = 8.31432; // J/(mol·K)
-
-    final double tempKelvin = temperature + 273.15;
-
-    // Barometric formula: P = P0 * exp(-g*M*h/(R*T))
-    // Solving for P0: P0 = P * exp(g*M*h/(R*T))
-    final double estimatedPressure =
-        standardSeaLevelPressure * exp(-g * M * gpsAltitude / (R * tempKelvin));
-
-    return estimatedPressure;
-  }
-
-  /// Get standard atmospheric pressure at given altitude
-  static double getStandardAtmosphericPressure(double altitude) {
-    // ISA model: P = 1013.25 * (1 - 0.0065 * h/288.15)^5.255
-    return 1013.25 * pow(1 - 0.0065 * altitude / 288.15, 5.255);
   }
 
   /// Get pressure from OpenWeatherMap API
