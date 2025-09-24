@@ -45,6 +45,8 @@ class WeatherFloorDetection {
         confidence: confidence,
         method: 'weather_station',
         error: null,
+        weatherStationInfo: weatherData.stationInfo,
+        weatherSource: weatherData.source,
       );
     } catch (e) {
       return FloorDetectionResult(

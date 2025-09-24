@@ -1,9 +1,14 @@
+import 'package:learning/services/weather_station/weather_data_model.dart';
+
 class FloorDetectionResult {
   final int floor;
   final double altitude;
   final double confidence; // 0.0 to 1.0
   final String method;
   final String? error;
+  final WeatherStationInfo?
+  weatherStationInfo; // Additional weather station info
+  final String? weatherSource; // Which weather service was used
 
   FloorDetectionResult({
     required this.floor,
@@ -11,6 +16,8 @@ class FloorDetectionResult {
     required this.confidence,
     required this.method,
     this.error,
+    this.weatherStationInfo,
+    this.weatherSource,
   });
 
   /// Get floor description

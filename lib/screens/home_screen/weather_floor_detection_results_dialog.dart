@@ -182,6 +182,52 @@ class WeatherFloorDetectionResultsDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            // Weather Station Information
+            if (result.weatherStationInfo != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.purple.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.purple.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '🌤️ Weather Station Information:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (result.weatherStationInfo!.stationName != null)
+                      Text(
+                        'Station: ${result.weatherStationInfo!.stationName}',
+                      ),
+                    if (result.weatherStationInfo!.city != null)
+                      Text('City: ${result.weatherStationInfo!.city}'),
+                    if (result.weatherStationInfo!.country != null)
+                      Text('Country: ${result.weatherStationInfo!.country}'),
+                    if (result.weatherStationInfo!.distanceFromUser != null)
+                      Text(
+                        result.weatherStationInfo!.distanceFromUser! == 0.0
+                            ? 'Distance: Data from your location area'
+                            : 'Distance: ${result.weatherStationInfo!.distanceFromUser!.toStringAsFixed(1)}km away',
+                      ),
+                    if (result.weatherStationInfo!.stationLatitude != null &&
+                        result.weatherStationInfo!.stationLongitude != null)
+                      Text(
+                        'Station Location: ${result.weatherStationInfo!.stationLatitude!.toStringAsFixed(4)}, ${result.weatherStationInfo!.stationLongitude!.toStringAsFixed(4)}',
+                      ),
+                    if (result.weatherSource != null)
+                      Text('Data Source: ${result.weatherSource}'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             // Additional Info
             Container(
               padding: const EdgeInsets.all(12),
@@ -209,6 +255,12 @@ class WeatherFloorDetectionResultsDialog extends StatelessWidget {
                   ),
                   Text(
                     '• Free weather services (Open-Meteo) are used by default',
+                  ),
+                  Text(
+                    '• Distance shows 0km because weather APIs return data for your location area',
+                  ),
+                  Text(
+                    '• The actual weather station may be several kilometers away',
                   ),
                 ],
               ),

@@ -3,6 +3,7 @@ import 'package:learning/services/gps_altitude_service.dart';
 import 'package:learning/services/weather_station/weather_station_service.dart';
 
 /// Floor detection status and monitoring utilities
+/// Note: When barometer is not available, only weather service is used (no sensor fusion)
 class FloorDetectionStatus {
   /// Get detection method status
   static Future<Map<String, bool>> getMethodStatus() async {

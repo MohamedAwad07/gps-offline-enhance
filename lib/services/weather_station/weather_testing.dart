@@ -33,6 +33,8 @@ class WeatherTesting {
           if (data != null) {
             testResult['successful_services'].add('OpenWeatherMap');
             testResult['openweathermap_data'] = data.toString();
+            testResult['openweathermap_station'] =
+                data.stationInfo?.toString() ?? 'No station info';
           } else {
             testResult['failed_services'].add('OpenWeatherMap');
             testResult['errors'].add('OpenWeatherMap returned null data');
@@ -54,6 +56,8 @@ class WeatherTesting {
           if (data != null) {
             testResult['successful_services'].add('WeatherAPI');
             testResult['weatherapi_data'] = data.toString();
+            testResult['weatherapi_station'] =
+                data.stationInfo?.toString() ?? 'No station info';
           } else {
             testResult['failed_services'].add('WeatherAPI');
             testResult['errors'].add('WeatherAPI returned null data');
@@ -74,6 +78,8 @@ class WeatherTesting {
         if (data != null) {
           testResult['successful_services'].add('Open-Meteo');
           testResult['openmeteo_data'] = data.toString();
+          testResult['openmeteo_station'] =
+              data.stationInfo?.toString() ?? 'No station info';
         } else {
           testResult['failed_services'].add('Open-Meteo');
           testResult['errors'].add('Open-Meteo returned null data');

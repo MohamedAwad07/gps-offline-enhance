@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:developer' as dev;
+import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:learning/services/weather_config.dart';
 import 'package:learning/services/weather_station/weather_data_model.dart';
@@ -9,6 +10,33 @@ class WeatherApiClients {
   static const String _openWeatherMapBaseUrl =
       'https://api.openweathermap.org/data/2.5';
   static const String _weatherApiBaseUrl = 'https://api.weatherapi.com/v1';
+
+  /// Calculate distance between two coordinates in kilometers usi  ng Haversine formula
+  static double _calculateDistance(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
+    const double earthRadius = 6371; // Earth's radius in kilometers
+
+    final double dLat = _degreesToRadians(lat2 - lat1);
+    final double dLon = _degreesToRadians(lon2 - lon1);
+
+    final double a =
+        sin(dLat / 2) * sin(dLat / 2) +
+        cos(_degreesToRadians(lat1)) *
+            cos(_degreesToRadians(lat2)) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+
+    final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return earthRadius * c;
+  }
+
+  static double _degreesToRadians(double degrees) {
+    return degrees * (pi / 180);
+  }
 
   /// Fetch data from OpenWeatherMap API
   static Future<WeatherData?> getOpenWeatherMapData(
@@ -29,12 +57,40 @@ class WeatherApiClients {
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
+
+      // Extract station information
+      WeatherStationInfo? stationInfo;
+      if (data['name'] != null || data['sys'] != null) {
+        // For OpenWeatherMap, the coordinates returned are the same as requested
+        // We don't have actual station coordinates, so we'll indicate this
+        final stationLat = (data['coord']['lat'] as num?)?.toDouble();
+        final stationLon = (data['coord']['lon'] as num?)?.toDouble();
+
+        // Check if the returned coordinates are different from user coordinates
+        // (they usually aren't for OpenWeatherMap, so distance will be 0)
+        final distance = (stationLat != null && stationLon != null)
+            ? _calculateDistance(latitude, longitude, stationLat, stationLon)
+            : null;
+
+        stationInfo = WeatherStationInfo(
+          stationName: data['name']?.toString(),
+          stationLatitude: stationLat,
+          stationLongitude: stationLon,
+          distanceFromUser: distance,
+          country: data['sys']['country']?.toString(),
+          city: data['name']?.toString(),
+        );
+      }
+
       return WeatherData(
         pressure: (data['main']['pressure'] as num).toDouble(), // hPa
         temperature: (data['main']['temp'] as num).toDouble(),
         humidity: (data['main']['humidity'] as num).toDouble(),
         timestamp: DateTime.now(),
         source: 'OpenWeatherMap',
+        stationInfo: stationInfo,
+        userLatitude: latitude,
+        userLongitude: longitude,
       );
     }
 
@@ -58,12 +114,40 @@ class WeatherApiClients {
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
+
+      // Extract station information
+      WeatherStationInfo? stationInfo;
+      if (data['location'] != null) {
+        final location = data['location'];
+        final stationLat = (location['lat'] as num?)?.toDouble();
+        final stationLon = (location['lon'] as num?)?.toDouble();
+
+        // For WeatherAPI, the coordinates returned are usually the same as requested
+        // We don't have actual station coordinates, so distance will typically be 0
+        final distance = (stationLat != null && stationLon != null)
+            ? _calculateDistance(latitude, longitude, stationLat, stationLon)
+            : null;
+
+        stationInfo = WeatherStationInfo(
+          stationName: location['name']?.toString(),
+          stationLatitude: stationLat,
+          stationLongitude: stationLon,
+          distanceFromUser: distance,
+          country: location['country']?.toString(),
+          region: location['region']?.toString(),
+          city: location['name']?.toString(),
+        );
+      }
+
       return WeatherData(
         pressure: (data['current']['pressure_mb'] as num).toDouble(), // hPa
         temperature: (data['current']['temp_c'] as num).toDouble(),
         humidity: (data['current']['humidity'] as num).toDouble(),
         timestamp: DateTime.now(),
         source: 'WeatherAPI',
+        stationInfo: stationInfo,
+        userLatitude: latitude,
+        userLongitude: longitude,
       );
     }
 
@@ -95,12 +179,25 @@ class WeatherApiClients {
             ? (pressures?.first as num?)?.toDouble() ?? 1013.25
             : 1013.25; // Default sea level pressure
 
+        // For Open-Meteo, we don't have specific station info, but we can use the coordinates
+        // as the "station" location since it's interpolated data
+        final stationInfo = WeatherStationInfo(
+          stationName: 'Open-Meteo Grid Point',
+          stationLatitude: latitude,
+          stationLongitude: longitude,
+          distanceFromUser: 0.0, // Same location as user
+          city: 'Interpolated Data',
+        );
+
         return WeatherData(
           pressure: pressure,
           temperature: (current['temperature'] as num).toDouble(),
           humidity: 50.0, // Not available in this API
           timestamp: DateTime.now(),
           source: 'Open-Meteo',
+          stationInfo: stationInfo,
+          userLatitude: latitude,
+          userLongitude: longitude,
         );
       }
     }

@@ -64,6 +64,20 @@ class WeatherTestResultsDialog extends StatelessWidget {
               ]),
               const SizedBox(height: 16),
             ],
+            // Weather Station Information
+            if (testResult['openweathermap_station'] != null ||
+                testResult['weatherapi_station'] != null ||
+                testResult['openmeteo_station'] != null) ...[
+              _buildTestSection('Weather Station Information', [
+                if (testResult['openweathermap_station'] != null)
+                  'OpenWeatherMap: ${testResult['openweathermap_station']}',
+                if (testResult['weatherapi_station'] != null)
+                  'WeatherAPI: ${testResult['weatherapi_station']}',
+                if (testResult['openmeteo_station'] != null)
+                  'Open-Meteo: ${testResult['openmeteo_station']}',
+              ]),
+              const SizedBox(height: 16),
+            ],
             _buildTestSection('Cache Status', [
               'Cached Locations: ${testResult['cache_status']['cached_locations']}',
               'Cache Valid: ${testResult['cache_status']['cache_valid']}',

@@ -3,12 +3,11 @@ import 'package:learning/models/floor_detection_result.dart';
 import 'package:learning/services/barometer/barometer_service.dart';
 import 'package:learning/services/gps_altitude_service.dart';
 import 'package:learning/services/weather_station/weather_station_service.dart';
-import 'package:learning/services/sensor_fusion/altitude_sensor_fusion.dart';
 import 'package:learning/services/filtering/altitude_kalman_filter.dart';
 import 'package:learning/services/calibration/pressure_calibration_service.dart';
 import 'package:learning/utils/app_logger.dart';
 
-/// Core floor detection logic with barometer priority
+/// Core floor detection logic: barometer priority, weather service fallback (no sensor fusion)
 class FloorDetectionCore {
   static final StreamController<FloorDetectionResult> _resultController =
       StreamController<FloorDetectionResult>.broadcast();
@@ -65,10 +64,10 @@ class FloorDetectionCore {
   static Stream<FloorDetectionResult> get detectionStream =>
       _resultController.stream;
 
-  /// Perform detection with BAROMETER PRIORITY - use only barometer when available
+  /// Perform detection with BAROMETER PRIORITY - use barometer when available, weather service only when not
   static Future<FloorDetectionResult> detectFloor() async {
     AppLogger.info(
-      'Starting floor detection with barometer priority',
+      'Starting floor detection: barometer priority, weather service fallback',
       source: 'FloorDetection',
     );
 
@@ -113,28 +112,11 @@ class FloorDetectionCore {
       AppLogger.error('Hardware barometer exception: $e', source: 'Barometer');
     }
 
-    // FALLBACK: Use sensor fusion when hardware barometer is not available
+    // FALLBACK: Use WEATHER SERVICE ONLY when hardware barometer is not available
     AppLogger.info(
-      'Using sensor fusion fallback methods',
+      'Using weather service only (no barometer available)',
       source: 'FloorDetection',
     );
-    final results = <FloorDetectionResult>[];
-
-    // Try GPS detection
-    try {
-      final gpsResult = await GPSAltitudeService.detectFloor();
-      AppLogger.info(
-        'GPS result: Floor: ${gpsResult.floor}, Altitude: ${gpsResult.altitude.toStringAsFixed(2)}m, Confidence: ${(gpsResult.confidence * 100).toStringAsFixed(1)}%, Method: ${gpsResult.method}',
-        source: 'GPS',
-      );
-      if (gpsResult.error == null) {
-        results.add(gpsResult);
-      } else {
-        AppLogger.error('GPS error: ${gpsResult.error}', source: 'GPS');
-      }
-    } catch (e) {
-      AppLogger.error('GPS exception: $e', source: 'GPS');
-    }
 
     // Try weather station detection if GPS location is available
     try {
@@ -149,31 +131,45 @@ class FloorDetectionCore {
           source: 'Weather',
         );
         if (weatherResult.error == null) {
-          results.add(weatherResult);
+          // Apply Kalman filtering for smoothing
+          final filteredResult = _applyKalmanFilter(weatherResult);
+
+          AppLogger.info(
+            '🌤️ WEATHER ONLY - Final result: Floor: ${filteredResult.floor}, Altitude: ${filteredResult.altitude.toStringAsFixed(2)}m, Confidence: ${(filteredResult.confidence * 100).toStringAsFixed(1)}%, Method: ${filteredResult.method}',
+            source: 'Final',
+          );
+
+          return filteredResult;
         } else {
           AppLogger.error(
             'Weather error: ${weatherResult.error}',
             source: 'Weather',
           );
         }
+      } else {
+        AppLogger.error(
+          'GPS location not available for weather service',
+          source: 'Weather',
+        );
       }
     } catch (e) {
       AppLogger.error('Weather exception: $e', source: 'Weather');
     }
 
-    // Filter outliers and fuse results (only for non-barometer methods)
-    final filteredResults = AltitudeSensorFusion.filterOutliers(results);
-    final fusedResult = AltitudeSensorFusion.fuseResults(filteredResults);
-
-    // Apply Kalman filtering for smoothing
-    final filteredResult = _applyKalmanFilter(fusedResult);
-
-    AppLogger.info(
-      '🔄 Sensor fusion result: Floor: ${filteredResult.floor}, Altitude: ${filteredResult.altitude.toStringAsFixed(2)}m, Confidence: ${(filteredResult.confidence * 100).toStringAsFixed(1)}%, Method: ${filteredResult.method}',
-      source: 'Final',
+    // If weather service also fails, return error result
+    AppLogger.error(
+      'All detection methods failed - no barometer and weather service unavailable',
+      source: 'FloorDetection',
     );
 
-    return filteredResult;
+    return FloorDetectionResult(
+      floor: 0,
+      altitude: 0,
+      confidence: 0.0,
+      method: 'weather_station',
+      error:
+          'No barometer available and weather service failed. Please check your internet connection and location services.',
+    );
   }
 
   /// Apply Kalman filtering to smooth altitude measurements

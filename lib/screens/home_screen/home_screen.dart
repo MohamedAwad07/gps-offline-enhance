@@ -10,6 +10,7 @@ import 'package:learning/screens/home_screen/detection_methods_status_card.dart'
 import 'package:learning/screens/home_screen/control_buttons_card.dart';
 import 'package:learning/screens/home_screen/background_service_card.dart';
 import 'package:learning/screens/home_screen/barometer_pressure_card.dart';
+import 'package:learning/screens/home_screen/weather_station_info_card.dart';
 import 'package:learning/screens/home_screen/weather_test_results_dialog.dart';
 import 'package:learning/screens/home_screen/weather_floor_detection_results_dialog.dart';
 
@@ -133,6 +134,9 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 16),
             // Barometric Pressure Card
             const BarometerPressureCard(),
+            const SizedBox(height: 16),
+            // Weather Station Info Card
+            const WeatherStationInfoCard(),
             const SizedBox(height: 16),
             DetectionMethodsStatusCard(methodStatus: _methodStatus),
             const SizedBox(height: 16),
