@@ -10,7 +10,6 @@ import 'package:learning/screens/home_screen/detection_methods_status_card.dart'
 import 'package:learning/screens/home_screen/control_buttons_card.dart';
 import 'package:learning/screens/home_screen/background_service_card.dart';
 import 'package:learning/screens/home_screen/barometer_pressure_card.dart';
-import 'package:learning/screens/home_screen/weather_config_dialog.dart';
 import 'package:learning/screens/home_screen/weather_test_results_dialog.dart';
 import 'package:learning/screens/home_screen/weather_floor_detection_results_dialog.dart';
 
@@ -141,8 +140,6 @@ class _HomePageState extends State<HomePage> {
             // Control Buttons
             ControlButtonsCard(
               onRefreshDetection: _onRefreshDetection,
-              onShowWeatherConfig: _showWeatherConfigDialog,
-              onTestWeatherService: _testWeatherService,
               onTestWeatherFloorDetection: _testWeatherFloorDetection,
             ),
             const SizedBox(height: 16),
@@ -162,13 +159,6 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void _showWeatherConfigDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => const WeatherConfigDialog(),
-    );
-  }
-
   Future<void> _testWeatherService() async {
     // Show loading dialog
     showDialog(
@@ -182,19 +172,14 @@ class _HomePageState extends State<HomePage> {
     );
 
     try {
-      // Run the weather service test
       final testResult = await WeatherStationService.testWeatherService();
 
-      // Close loading dialog
       Navigator.of(context).pop();
 
-      // Show test results
       _showWeatherTestResults(testResult);
     } catch (e) {
-      // Close loading dialog
       Navigator.of(context).pop();
 
-      // Show error
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Weather test failed: $e'),
@@ -235,11 +220,10 @@ class _HomePageState extends State<HomePage> {
     );
 
     try {
-      // Get current location first
       final location = await GPSAltitudeService.getCurrentLocation();
 
       if (location?.latitude == null || location?.longitude == null) {
-        Navigator.of(context).pop(); // Close loading dialog
+        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -251,22 +235,17 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      // Test weather floor detection with current location
       final result = await WeatherStationService.detectFloor(
         latitude: location!.latitude!,
         longitude: location.longitude!,
       );
 
-      // Close loading dialog
       Navigator.of(context).pop();
 
-      // Show results
       _showWeatherFloorDetectionResults(result, location);
     } catch (e) {
-      // Close loading dialog
       Navigator.of(context).pop();
 
-      // Show error
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Weather floor detection failed: $e'),

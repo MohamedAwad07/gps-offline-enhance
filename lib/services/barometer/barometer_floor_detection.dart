@@ -92,7 +92,7 @@ class BarometerFloorDetection {
         altitude: weatherResult.altitude,
         confidence:
             weatherResult.confidence *
-            0.9, // Slightly lower confidence for weather data
+            0.9,
         method: 'barometer (weather)',
         error: weatherResult.error,
       );

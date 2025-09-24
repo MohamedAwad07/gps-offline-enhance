@@ -12,7 +12,7 @@ class FloorDetectionCore {
 
   /// Start comprehensive floor detection
   static Future<void> startFloorDetection({
-    Duration interval = const Duration(seconds: 2),
+    Duration interval = const Duration(seconds: 10),
   }) async {
     if (_isMonitoring) return;
 

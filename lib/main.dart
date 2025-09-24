@@ -9,14 +9,12 @@ import 'package:permission_handler/permission_handler.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Request necessary permissions
   await Permission.notification.isDenied.then((value) {
     if (value) {
       Permission.notification.request();
     }
   });
 
-  // Request location permissions for GPS altitude detection
   await Permission.location.isDenied.then((value) {
     if (value) {
       Permission.location.request();
@@ -25,7 +23,6 @@ void main() async {
 
   await initializeService();
 
-  // Start floor detection service
   await FloorDetectionService.startFloorDetection();
 
   runApp(

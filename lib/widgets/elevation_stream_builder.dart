@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:learning/services/weather_barometric_altimeter_service.dart';
+import 'package:learning/services/barometric_altimeter/weather_barometric_altimeter_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/barometric_altimeter_provider.dart';
 
@@ -47,7 +47,8 @@ class _ElevationStreamBuilderState extends State<ElevationStreamBuilder> {
 
   Future<void> _updatePressureData() async {
     try {
-      final pressure = await WeatherBarometricAltimeterService.getCurrentPressure();
+      final pressure =
+          await WeatherBarometricAltimeterService.getCurrentPressure();
       if (pressure != null && mounted) {
         final provider = Provider.of<BarometricAltimeterProvider>(
           context,

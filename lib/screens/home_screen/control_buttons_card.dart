@@ -3,15 +3,11 @@ import 'package:learning/screens/barometric_altimeter/barometric_altimeter_scree
 
 class ControlButtonsCard extends StatelessWidget {
   final VoidCallback onRefreshDetection;
-  final VoidCallback onShowWeatherConfig;
-  final VoidCallback onTestWeatherService;
   final VoidCallback onTestWeatherFloorDetection;
 
   const ControlButtonsCard({
     super.key,
     required this.onRefreshDetection,
-    required this.onShowWeatherConfig,
-    required this.onTestWeatherService,
     required this.onTestWeatherFloorDetection,
   });
 
@@ -36,30 +32,6 @@ class ControlButtonsCard extends StatelessWidget {
               label: const Text('Refresh Detection'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-            ),
-            const SizedBox(height: 8),
-            // Weather Configuration
-            ElevatedButton.icon(
-              onPressed: onShowWeatherConfig,
-              icon: const Icon(Icons.cloud),
-              label: const Text('Weather Config'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            // Test Weather Service
-            ElevatedButton.icon(
-              onPressed: onTestWeatherService,
-              icon: const Icon(Icons.science),
-              label: const Text('Test Weather Service'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
               ),
             ),
             const SizedBox(height: 8),

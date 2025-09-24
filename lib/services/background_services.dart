@@ -65,7 +65,7 @@ void onStart(ServiceInstance service) async {
   service.on('stopService').listen((event) {
     service.stopSelf();
   });
-  Timer.periodic(const Duration(seconds: 5), (timer) async {
+  Timer.periodic(const Duration(seconds: 120), (timer) async {
     if (service is AndroidServiceInstance) {
       if (await service.isForegroundService()) {
         service.setForegroundNotificationInfo(

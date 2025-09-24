@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:learning/providers/barometric_altimeter_provider.dart';
 import 'package:learning/services/gps_altitude_service.dart';
@@ -17,27 +18,12 @@ class WeatherBarometricAltimeterService {
     _isInitialized = true;
   }
 
-  /// Check if weather service is available (always true as it uses internet)
+  /// Check if weather service is available (includes offline fallbacks)
   static Future<bool> isAvailable() async {
     try {
-      // Check if GPS is available for location
-      final gpsAvailable = await GPSAltitudeService.isGPSAvailable();
-      if (!gpsAvailable) {
-        return false;
-      }
-
-      // Try to get a test pressure reading
-      final location = await GPSAltitudeService.getCurrentLocation();
-      if (location?.latitude == null || location?.longitude == null) {
-        return false;
-      }
-
-      // Test weather service availability by trying to get pressure
-      final pressure = await _getPressureFromOpenWeatherMap(
-        location!.latitude!,
-        location.longitude!,
-      );
-      return pressure != null;
+      // Always return true since we have offline fallbacks
+      // The getCurrentPressure() method will handle online/offline logic
+      return true;
     } catch (e) {
       return false;
     }
@@ -76,8 +62,13 @@ class WeatherBarometricAltimeterService {
     _updateTimer?.cancel();
     _updateTimer = null;
     if (_provider != null) {
-      _provider!.setMonitoringStatus(false);
-      _provider!.setStatus('Stopped monitoring');
+      // Use post frame callback to avoid setState during disposal
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_provider != null) {
+          _provider!.setMonitoringStatus(false);
+          _provider!.setStatus('Stopped monitoring');
+        }
+      });
     }
   }
 
@@ -97,9 +88,8 @@ class WeatherBarometricAltimeterService {
         return 1013.25;
       }
 
-      // Try online services first
-      final available = await isAvailable();
-      if (available) {
+      // Try online services first (if internet is available)
+      try {
         // Try to get pressure from OpenWeatherMap
         final pressure = await _getPressureFromOpenWeatherMap(
           location!.latitude!,
@@ -123,6 +113,8 @@ class WeatherBarometricAltimeterService {
           _currentService = 'Open-Meteo';
           return fallbackPressure;
         }
+      } catch (e) {
+        // Internet not available, continue to offline fallbacks
       }
 
       // OFFLINE FALLBACKS
@@ -135,12 +127,16 @@ class WeatherBarometricAltimeterService {
       }
 
       // 2. Calculate pressure from GPS altitude
-      if (location?.altitude != null) {
+      if (location?.altitude != null && location!.altitude! > 0) {
         final gpsPressure = calculateSeaLevelPressureFromGPS(
-          location!.altitude!,
+          location.altitude!,
         );
         _currentService = 'GPS-Based (Offline)';
         return gpsPressure;
+      } else if (location?.altitude != null && location!.altitude! == 0) {
+        // GPS altitude is 0 (common in emulators), use standard sea level pressure
+        _currentService = 'GPS Sea Level (Offline)';
+        return 1013.25;
       }
 
       // 3. Use standard atmospheric model

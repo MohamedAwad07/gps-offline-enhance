@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:learning/services/weather_barometric_altimeter_service.dart';
+import 'package:learning/services/barometric_altimeter/weather_barometric_altimeter_service.dart';
 import 'package:provider/provider.dart';
 import 'package:learning/providers/barometric_altimeter_provider.dart';
 import 'package:learning/widgets/elevation_stream_builder.dart';
@@ -40,13 +40,12 @@ class _AltimeterDisplayState extends State<AltimeterDisplay> {
       );
       WeatherBarometricAltimeterService.initialize(provider);
 
-      // Check if weather service is available
+      // Check if weather service is available (now includes offline fallbacks)
       final available = await WeatherBarometricAltimeterService.isAvailable();
       if (!available) {
         setState(() {
           _hasOtherError = true;
-          _errorMessage =
-              'Weather service not available - GPS or internet required';
+          _errorMessage = 'Service initialization failed';
         });
         return;
       }
