@@ -134,7 +134,6 @@ class _HomePageState extends State<HomePage> {
             // Barometric Pressure Card
             const BarometerPressureCard(),
             const SizedBox(height: 16),
-            // Detection Methods Status
             DetectionMethodsStatusCard(methodStatus: _methodStatus),
             const SizedBox(height: 16),
             // Control Buttons

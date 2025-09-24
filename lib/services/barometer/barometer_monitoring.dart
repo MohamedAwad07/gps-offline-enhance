@@ -44,6 +44,10 @@ class BarometerMonitoring {
       switch (call.method) {
         case 'pressureUpdate':
           final double pressure = call.arguments;
+
+          // Always use standard sea level pressure for hardware barometer
+          BarometerCalculations.setSeaLevelPressure(1013.25);
+
           final double altitude = BarometerCalculations.calculateAltitude(
             pressure,
           );

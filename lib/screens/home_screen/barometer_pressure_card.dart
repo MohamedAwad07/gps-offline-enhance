@@ -155,7 +155,7 @@ class _BarometerPressureCardState extends State<BarometerPressureCard> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          _currentPressure!.toStringAsFixed(1),
+                          _currentPressure!.toStringAsFixed(2),
                           style: const TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,

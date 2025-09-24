@@ -48,26 +48,35 @@ class BarometricAltimeterProvider with ChangeNotifier {
 
   /// Calculate absolute altitude from pressure using barometric formula
   /// Formula: h = (T0 / L) * (1 - (P / P0)^(R * L / (g * M)))
-  /// where P is current pressure, P0 is sea level pressure (1013.25 hPa)
-  void calculateAltitudeFromPressure(double pressure) {
+  /// where P is current pressure, P0 is sea level pressure (1013.25 hPa or calibrated)
+  void calculateAltitudeFromPressure(
+    double pressure, {
+    double temperature = 15.0,
+  }) {
     if (pressure <= 0) return;
 
-    const double seaLevelPressure =
-        1013.25; // Standard atmospheric pressure at sea level
-    const double temperature = 15.0; // °C (standard temperature)
-    const double lapseRate = 0.0065; // K/m
-    const double R = 8.31447; // Universal gas constant
-    const double g = 9.80665; // Gravitational acceleration
-    const double M = 0.0289644; // Molar mass of dry air
+    // Use calibrated or standard sea level pressure
+    final double seaLevelPressure =
+        _pZero ?? 1013.25; // Use calibrated or standard pressure
 
-    // More accurate barometric formula for altitude calculation
+    // ISA barometric formula constants
+    const double lapseRate = 0.0065; // K/m
+    const double R = 8.31447; // Universal gas constant J/(mol·K)
+    const double g = 9.80665; // Gravitational acceleration m/s²
+    const double M = 0.0289644; // Molar mass of dry air kg/mol
+
+    // Convert temperature to Kelvin (THIS WAS THE BUG!)
+    final double tempKelvin = temperature + 273.15;
+
+    // ISA barometric formula for altitude calculation
     final double altitude =
-        (temperature / lapseRate) *
-        (1 - pow(pressure / seaLevelPressure, (R * lapseRate) / (g * M)))
-            .toDouble();
+        (tempKelvin / lapseRate) *
+        (1 - pow(pressure / seaLevelPressure, (R * lapseRate) / (g * M)));
 
     _currentAltitude = altitude;
-    dev.log('Pressure: $pressure hPa, Calculated altitude: $altitude m');
+    dev.log(
+      'Pressure: $pressure hPa, Temperature: $temperature°C, Calculated altitude: $altitude m',
+    );
     notifyListeners();
   }
 

@@ -21,8 +21,11 @@ class BarometerService {
     return BarometerSensorInfo.getCurrentPressure();
   }
 
-  /// Calculate altitude from pressure using barometric formula
+  /// Calculate altitude from pressure using barometric formula (standard pressure)
   static double calculateAltitude(double pressure) {
+    // Always use standard sea level pressure for hardware barometer
+    BarometerCalculations.setSeaLevelPressure(1013.25);
+
     return BarometerCalculations.calculateAltitude(pressure);
   }
 
