@@ -49,10 +49,7 @@ class _GnssDashboardState extends State<GnssDashboard> {
       // Listen to events
       _eventSubscription = _enhancedService.eventStream.listen(_handleEvent);
 
-      // Start periodic updates
-      _updateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        _updateStatus();
-      });
+      // Don't start tracking automatically - wait for user to press FAB
     }
   }
 
@@ -96,8 +93,14 @@ class _GnssDashboardState extends State<GnssDashboard> {
   Future<void> _toggleTracking() async {
     if (_isTracking) {
       await _enhancedService.stopTracking();
+      _updateTimer?.cancel();
+      _updateTimer = null;
     } else {
       await _enhancedService.startTracking(useGnssNative: _useGnssNative);
+      // Start periodic updates when tracking begins
+      _updateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        _updateStatus();
+      });
     }
   }
 
@@ -190,9 +193,6 @@ class _GnssDashboardState extends State<GnssDashboard> {
               ),
             ),
           ),
-
-          // Bottom Navigation Modules
-          _buildBottomModules(),
         ],
       ),
       floatingActionButton: Container(
@@ -222,31 +222,86 @@ class _GnssDashboardState extends State<GnssDashboard> {
 
   Widget _buildTopStatusCards() {
     final status = _currentStatus;
-    if (status == null) {
-      return Container(
-        height: 120,
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF333333), width: 1),
-        ),
-        child: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.gps_off, size: 48, color: Color(0xFF6C757D)),
-              SizedBox(height: 8),
-              Text(
-                'No GNSS Status',
-                style: TextStyle(
-                  color: Color(0xFF6C757D),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+    if (status == null || !_isTracking) {
+      return Row(
+        children: [
+          // GNSS Status Card - Not Tracking
+          Expanded(
+            child: Container(
+              height: 120,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF333333), width: 1),
+              ),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.gps_off, size: 32, color: Color(0xFF6C757D)),
+                    SizedBox(height: 8),
+                    Text(
+                      'GNSS Status',
+                      style: TextStyle(
+                        color: Color(0xFF6C757D),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Not Tracking',
+                      style: TextStyle(color: Color(0xFF6C757D), fontSize: 12),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(width: 16),
+
+          // Accuracy Card - Not Tracking
+          Expanded(
+            child: Container(
+              height: 120,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF333333), width: 1),
+              ),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.center_focus_strong,
+                      size: 32,
+                      color: Color(0xFF6C757D),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Accuracy (± m)',
+                      style: TextStyle(
+                        color: Color(0xFF6C757D),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '--',
+                      style: TextStyle(
+                        color: Color(0xFF6C757D),
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       );
     }
 
@@ -378,7 +433,7 @@ class _GnssDashboardState extends State<GnssDashboard> {
 
   Widget _buildSatelliteDataSection() {
     final status = _currentStatus;
-    if (status == null || _satellites.isEmpty) {
+    if (status == null || _satellites.isEmpty || !_isTracking) {
       return Container(
         height: 300,
         decoration: BoxDecoration(
@@ -386,24 +441,35 @@ class _GnssDashboardState extends State<GnssDashboard> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFF333333), width: 1),
         ),
-        child: const Center(
+        child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                Icons.satellite_outlined,
+                _isTracking
+                    ? Icons.satellite_outlined
+                    : Icons.play_circle_outline,
                 size: 48,
-                color: Color(0xFF6C757D),
+                color: const Color(0xFF6C757D),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Text(
-                'No Satellite Data',
-                style: TextStyle(
+                _isTracking
+                    ? 'No Satellite Data'
+                    : 'Start Tracking to View Data',
+                style: const TextStyle(
                   color: Color(0xFF6C757D),
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
               ),
+              if (!_isTracking) ...[
+                const SizedBox(height: 4),
+                const Text(
+                  'Press the play button to begin GNSS tracking',
+                  style: TextStyle(color: Color(0xFF6C757D), fontSize: 12),
+                ),
+              ],
             ],
           ),
         ),
@@ -481,8 +547,85 @@ class _GnssDashboardState extends State<GnssDashboard> {
 
   Widget _buildSnrIndicator() {
     final status = _currentStatus;
-    if (status == null) {
-      return const SizedBox.shrink();
+    if (status == null || !_isTracking) {
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF333333), width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'AVG SNR',
+                style: TextStyle(
+                  color: Color(0xFF6C757D),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Gradient Bar (disabled state)
+              Container(
+                height: 20,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: const Color(0xFF333333),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Scale Labels (disabled state)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '00',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                  Text(
+                    '10',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                  Text(
+                    '20',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                  Text(
+                    '30',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                  Text(
+                    '50',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                  Text(
+                    '99',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Current Value Indicator (disabled state)
+              const Center(
+                child: Text(
+                  '--',
+                  style: TextStyle(
+                    color: Color(0xFF6C757D),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
     final avgSnr = status.averageSnr;
 
@@ -584,56 +727,56 @@ class _GnssDashboardState extends State<GnssDashboard> {
     );
   }
 
-  Widget _buildBottomModules() {
-    return Container(
-      height: 100,
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
-        border: Border(top: BorderSide(color: Color(0xFF333333), width: 1)),
-      ),
-      child: Row(
-        children: [
-          _buildBottomModule(Icons.radar, 'Skyplot', const Color(0xFF00E5FF)),
-          _buildBottomModule(Icons.public, 'Map', const Color(0xFF28A745)),
-          _buildBottomModule(Icons.explore, 'Compass', const Color(0xFF17A2B8)),
-          _buildBottomModule(Icons.speed, 'Speed', const Color(0xFFFFC107)),
-          _buildBottomModule(
-            Icons.access_time,
-            'Time',
-            const Color(0xFF6F42C1),
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget _buildBottomModules() {
+  //   return Container(
+  //     height: 100,
+  //     decoration: const BoxDecoration(
+  //       color: Color(0xFF1A1A1A),
+  //       border: Border(top: BorderSide(color: Color(0xFF333333), width: 1)),
+  //     ),
+  //     child: Row(
+  //       children: [
+  //         _buildBottomModule(Icons.radar, 'Skyplot', const Color(0xFF00E5FF)),
+  //         _buildBottomModule(Icons.public, 'Map', const Color(0xFF28A745)),
+  //         _buildBottomModule(Icons.explore, 'Compass', const Color(0xFF17A2B8)),
+  //         _buildBottomModule(Icons.speed, 'Speed', const Color(0xFFFFC107)),
+  //         _buildBottomModule(
+  //           Icons.access_time,
+  //           'Time',
+  //           const Color(0xFF6F42C1),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
-  Widget _buildBottomModule(IconData icon, String label, Color color) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0A0A0A),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3), width: 1),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // Widget _buildBottomModule(IconData icon, String label, Color color) {
+  //   return Expanded(
+  //     child: Container(
+  //       margin: const EdgeInsets.all(8),
+  //       decoration: BoxDecoration(
+  //         color: const Color(0xFF0A0A0A),
+  //         borderRadius: BorderRadius.circular(12),
+  //         border: Border.all(color: color.withOpacity(0.3), width: 1),
+  //       ),
+  //       child: Column(
+  //         mainAxisAlignment: MainAxisAlignment.center,
+  //         children: [
+  //           Icon(icon, color: color, size: 24),
+  //           const SizedBox(height: 4),
+  //           Text(
+  //             label,
+  //             style: TextStyle(
+  //               color: color,
+  //               fontSize: 10,
+  //               fontWeight: FontWeight.w600,
+  //             ),
+  //           ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Widget _buildSignalStrengthChart() {
     final usedSatellites = _satellites.where((s) => s.usedInFix).toList();
@@ -671,11 +814,42 @@ class _GnssDashboardState extends State<GnssDashboard> {
                     );
 
                     return Container(
-                      width: 40,
+                      width: 32,
                       margin: const EdgeInsets.symmetric(horizontal: 2),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
+                          // Satellite constellation type above the bar
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 2,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _getConstellationColor(
+                                satellite.constellation,
+                              ).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(3),
+                              border: Border.all(
+                                color: _getConstellationColor(
+                                  satellite.constellation,
+                                ).withOpacity(0.5),
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Text(
+                              satellite.constellation,
+                              style: TextStyle(
+                                fontSize: 7,
+                                fontFamily: 'monospace',
+                                color: _getConstellationColor(
+                                  satellite.constellation,
+                                ),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
                           Container(
                             height: height,
                             width: 30,
@@ -774,6 +948,25 @@ class _GnssDashboardState extends State<GnssDashboard> {
     if (snr >= 20) return const Color(0xFFFFC107);
     if (snr >= 10) return const Color(0xFFFD7E14);
     return const Color(0xFFDC3545);
+  }
+
+  Color _getConstellationColor(String constellation) {
+    switch (constellation.toUpperCase()) {
+      case 'GPS':
+        return const Color(0xFF007BFF);
+      case 'GLONASS':
+        return const Color(0xFF28A745);
+      case 'GALILEO':
+        return const Color(0xFF6F42C1);
+      case 'BEIDOU':
+        return const Color(0xFFDC3545);
+      case 'QZSS':
+        return const Color(0xFF17A2B8);
+      case 'IRNSS':
+        return const Color(0xFFFD7E14);
+      default:
+        return const Color(0xFF6C757D);
+    }
   }
 }
 
