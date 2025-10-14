@@ -265,6 +265,7 @@ enum GnssFixType {
   noFix, // No position fix
   fix2D, // 2D position fix (lat/lon only)
   fix3D, // 3D position fix (lat/lon/altitude)
+  gnssDeadReckoning, // GNSS dead reckoning
 }
 
 /// GNSS measurement data for advanced positioning algorithms

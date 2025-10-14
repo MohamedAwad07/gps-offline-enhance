@@ -17,10 +17,9 @@ class _GnssDashboardState extends State<GnssDashboard> {
 
   bool _isInitialized = false;
   bool _isTracking = false;
-  bool _useGnssNative = true;
+  final bool _useGnssNative = true;
 
   GnssStatus? _currentStatus;
-  GnssCapabilities? _capabilities;
   List<SatelliteInfo> _satellites = [];
 
   StreamSubscription<EnhancedLocationEvent>? _eventSubscription;
@@ -46,9 +45,6 @@ class _GnssDashboardState extends State<GnssDashboard> {
       setState(() {
         _isInitialized = true;
       });
-
-      // Get capabilities
-      _capabilities = await _enhancedService.getGnssCapabilities();
 
       // Listen to events
       _eventSubscription = _enhancedService.eventStream.listen(_handleEvent);
@@ -108,70 +104,145 @@ class _GnssDashboardState extends State<GnssDashboard> {
   @override
   Widget build(BuildContext context) {
     if (!_isInitialized) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        backgroundColor: const Color(0xFF0A0A0A),
+        body: const Center(
+          child: CircularProgressIndicator(color: Color(0xFF00E5FF)),
+        ),
+      );
     }
 
     return Scaffold(
+      backgroundColor: const Color(0xFF0A0A0A),
       appBar: AppBar(
-        title: const Text('🛰️ GNSS Dashboard'),
-        backgroundColor: Colors.deepPurple,
+        title: const Text(
+          'GNSS Dashboard',
+          style: TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.5),
+        ),
+        backgroundColor: const Color(0xFF1A1A1A),
         foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
         actions: [
-          Switch(
-            value: _useGnssNative,
-            onChanged: _isTracking
-                ? null
-                : (value) {
-                    setState(() {
-                      _useGnssNative = value;
-                    });
-                  },
-          ),
-          const Padding(
-            padding: EdgeInsets.only(right: 16),
-            child: Center(
-              child: Text('Native GNSS', style: TextStyle(fontSize: 12)),
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: _isTracking
+                  ? const Color(0xFF00E5FF).withOpacity(0.2)
+                  : const Color(0xFF6C757D).withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: _isTracking
+                    ? const Color(0xFF00E5FF)
+                    : const Color(0xFF6C757D),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: _isTracking
+                        ? const Color(0xFF00E5FF)
+                        : const Color(0xFF6C757D),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _isTracking ? 'TRACKING' : 'STANDBY',
+                  style: TextStyle(
+                    color: _isTracking
+                        ? const Color(0xFF00E5FF)
+                        : const Color(0xFF6C757D),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _buildStatusCard(),
-            const SizedBox(height: 16),
-            _buildSatelliteInfoCard(),
-            const SizedBox(height: 16),
-            _buildSatelliteVisualization(),
-            const SizedBox(height: 16),
-            _buildConstellationInfo(),
-            const SizedBox(height: 16),
-            _buildCapabilitiesCard(),
+      body: Column(
+        children: [
+          // Main Content Area
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  // Top Status Cards
+                  _buildTopStatusCards(),
+                  const SizedBox(height: 20),
+
+                  // Satellite Data Section
+                  _buildSatelliteDataSection(),
+                  const SizedBox(height: 20),
+
+                  // SNR Indicator
+                  _buildSnrIndicator(),
+                ],
+              ),
+            ),
+          ),
+
+          // Bottom Navigation Modules
+          _buildBottomModules(),
+        ],
+      ),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: (_isTracking ? Colors.red : Colors.green).withOpacity(0.3),
+              blurRadius: 10,
+              spreadRadius: 2,
+            ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _toggleTracking,
-        backgroundColor: _isTracking ? Colors.red : Colors.green,
-        child: Icon(_isTracking ? Icons.stop : Icons.play_arrow),
+        child: FloatingActionButton(
+          onPressed: _toggleTracking,
+          backgroundColor: _isTracking
+              ? const Color(0xFFDC3545)
+              : const Color(0xFF28A745),
+          child: Icon(
+            _isTracking ? Icons.stop : Icons.play_arrow,
+            color: Colors.white,
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildStatusCard() {
+  Widget _buildTopStatusCards() {
     final status = _currentStatus;
     if (status == null) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+      return Container(
+        height: 120,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF333333), width: 1),
+        ),
+        child: const Center(
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.gps_off, size: 48, color: Colors.grey),
-              const SizedBox(height: 8),
+              Icon(Icons.gps_off, size: 48, color: Color(0xFF6C757D)),
+              SizedBox(height: 8),
               Text(
                 'No GNSS Status',
-                style: Theme.of(context).textTheme.headlineSmall,
+                style: TextStyle(
+                  color: Color(0xFF6C757D),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ],
           ),
@@ -179,162 +250,385 @@ class _GnssDashboardState extends State<GnssDashboard> {
       );
     }
 
-    return Card(
-      color: _getFixTypeColor(status.fixType).withOpacity(0.1),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStatusItem(
-                  'GNSS Status',
-                  status.fixType.name,
-                  _getFixTypeColor(status.fixType),
-                ),
-                _buildStatusItem(
-                  'Accuracy',
-                  '${status.accuracy.toStringAsFixed(1)} m',
-                  Colors.cyan,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStatusItem(
-                  'In View',
-                  '${status.satellitesInView}',
-                  Colors.blue,
-                ),
-                _buildStatusItem(
-                  'In Use',
-                  '${status.satellitesInUse}',
-                  Colors.green,
-                ),
-                _buildStatusItem(
-                  'Avg SNR',
-                  status.averageSnr.toStringAsFixed(1),
-                  Colors.orange,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusItem(String label, String value, Color color) {
-    return Column(
+    return Row(
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: color,
-            fontWeight: FontWeight.bold,
+        // GNSS Status Card
+        Expanded(
+          child: Container(
+            height: 120,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _getFixTypeColor(status.fixType).withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'GNSS Status',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const Spacer(),
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: _getFixTypeColor(status.fixType),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _getFixTypeIcon(status.fixType),
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          status.fixType.name.toUpperCase(),
+                          style: TextStyle(
+                            color: _getFixTypeColor(status.fixType),
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+
+        // Accuracy Card
+        Expanded(
+          child: Container(
+            height: 120,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _getAccuracyColor(status.accuracy).withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Accuracy (± m)',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const Spacer(),
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: _getAccuracyColor(status.accuracy),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.center_focus_strong,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          status.accuracy.toStringAsFixed(0),
+                          style: TextStyle(
+                            color: _getAccuracyColor(status.accuracy),
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSatelliteInfoCard() {
-    if (_satellites.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            'No satellite data available',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyLarge,
+  Widget _buildSatelliteDataSection() {
+    final status = _currentStatus;
+    if (status == null || _satellites.isEmpty) {
+      return Container(
+        height: 300,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF333333), width: 1),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.satellite_outlined,
+                size: 48,
+                color: Color(0xFF6C757D),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'No Satellite Data',
+                style: TextStyle(
+                  color: Color(0xFF6C757D),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
       );
     }
 
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF333333), width: 1),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '📡 Satellite Information',
-              style: Theme.of(context).textTheme.titleLarge,
+            // Satellite Count Info
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'In View',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      '${status.satellitesInView}',
+                      style: const TextStyle(
+                        color: Color(0xFF00E5FF),
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Text(
+                      'In Use',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      '${status.satellitesInUse}',
+                      style: const TextStyle(
+                        color: Color(0xFF28A745),
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            ..._satellites
-                .take(10)
-                .map((satellite) => _buildSatelliteItem(satellite)),
-            if (_satellites.length > 10)
-              Text(
-                '... and ${_satellites.length - 10} more satellites',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+            const SizedBox(height: 20),
+
+            // Signal Strength Chart
+            SizedBox(height: 200, child: _buildSignalStrengthChart()),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSatelliteItem(SatelliteInfo satellite) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+  Widget _buildSnrIndicator() {
+    final status = _currentStatus;
+    if (status == null) {
+      return const SizedBox.shrink();
+    }
+    final avgSnr = status.averageSnr;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF333333), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'AVG SNR',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Gradient Bar
+            Container(
+              height: 20,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFFDC3545), // Red
+                    Color(0xFFFD7E14), // Orange
+                    Color(0xFFFFC107), // Yellow
+                    Color(0xFF28A745), // Green
+                  ],
+                  stops: [0.0, 0.3, 0.6, 1.0],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Scale Labels
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '00',
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                ),
+                Text(
+                  '10',
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                ),
+                Text(
+                  '20',
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                ),
+                Text(
+                  '30',
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                ),
+                Text(
+                  '50',
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                ),
+                Text(
+                  '99',
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Current Value Indicator
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: _getSnrColor(avgSnr),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  avgSnr.toStringAsFixed(1),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomModules() {
+    return Container(
+      height: 100,
+      decoration: const BoxDecoration(
+        color: Color(0xFF1A1A1A),
+        border: Border(top: BorderSide(color: Color(0xFF333333), width: 1)),
+      ),
       child: Row(
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: _getSignalColor(satellite.snr),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '${satellite.constellation} ${satellite.svid}',
-            style: const TextStyle(fontFamily: 'monospace'),
-          ),
-          const Spacer(),
-          Text(
-            '${satellite.snr.toStringAsFixed(1)} dB-Hz',
-            style: const TextStyle(fontFamily: 'monospace'),
-          ),
-          const SizedBox(width: 8),
-          Icon(
-            satellite.usedInFix
-                ? Icons.check_circle
-                : Icons.radio_button_unchecked,
-            size: 16,
-            color: satellite.usedInFix ? Colors.green : Colors.grey,
+          _buildBottomModule(Icons.radar, 'Skyplot', const Color(0xFF00E5FF)),
+          _buildBottomModule(Icons.public, 'Map', const Color(0xFF28A745)),
+          _buildBottomModule(Icons.explore, 'Compass', const Color(0xFF17A2B8)),
+          _buildBottomModule(Icons.speed, 'Speed', const Color(0xFFFFC107)),
+          _buildBottomModule(
+            Icons.access_time,
+            'Time',
+            const Color(0xFF6F42C1),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSatelliteVisualization() {
-    if (_satellites.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+  Widget _buildBottomModule(IconData icon, String label, Color color) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A0A0A),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3), width: 1),
+        ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 4),
             Text(
-              '📊 Signal Strength Visualization',
-              style: Theme.of(context).textTheme.titleLarge,
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-            const SizedBox(height: 16),
-            SizedBox(height: 200, child: _buildSignalStrengthChart()),
           ],
         ),
       ),
@@ -344,144 +638,93 @@ class _GnssDashboardState extends State<GnssDashboard> {
   Widget _buildSignalStrengthChart() {
     final usedSatellites = _satellites.where((s) => s.usedInFix).toList();
     if (usedSatellites.isEmpty) {
-      return const Center(child: Text('No satellites used in fix'));
+      return const Center(
+        child: Text(
+          'No satellites used in fix',
+          style: TextStyle(color: Color(0xFF6C757D), fontSize: 14),
+        ),
+      );
     }
 
-    return ListView.builder(
-      scrollDirection: Axis.horizontal,
-      itemCount: usedSatellites.length,
-      itemBuilder: (context, index) {
-        final satellite = usedSatellites[index];
-        final height = (satellite.snr / 50.0 * 150).clamp(10.0, 150.0);
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A0A0A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF333333), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // Grid lines
+            Expanded(
+              child: CustomPaint(
+                painter: GridPainter(),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: usedSatellites.length,
+                  itemBuilder: (context, index) {
+                    final satellite = usedSatellites[index];
+                    final height = (satellite.snr / 50.0 * 120).clamp(
+                      10.0,
+                      120.0,
+                    );
 
-        return Container(
-          width: 40,
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Container(
-                height: height,
-                width: 30,
-                decoration: BoxDecoration(
-                  color: _getSignalColor(satellite.snr),
-                  borderRadius: BorderRadius.circular(4),
+                    return Container(
+                      width: 40,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Container(
+                            height: height,
+                            width: 30,
+                            decoration: BoxDecoration(
+                              color: _getSignalColor(satellite.snr),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1A1A1A),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: const Color(0xFF333333),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              '${satellite.svid}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontFamily: 'monospace',
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            satellite.snr.toStringAsFixed(0),
+                            style: const TextStyle(
+                              fontSize: 8,
+                              fontFamily: 'monospace',
+                              color: Color(0xFF6C757D),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                '${satellite.svid}',
-                style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
-              ),
-              Text(
-                satellite.snr.toStringAsFixed(0),
-                style: const TextStyle(fontSize: 8, fontFamily: 'monospace'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildConstellationInfo() {
-    if (_currentStatus == null) {
-      return const SizedBox.shrink();
-    }
-
-    final constellationCount = _currentStatus!.constellationCount;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '🌍 Constellation Information',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 16,
-              runSpacing: 8,
-              children: constellationCount.entries.map((entry) {
-                return _buildConstellationChip(entry.key, entry.value);
-              }).toList(),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildConstellationChip(String constellation, int count) {
-    return Chip(
-      label: Text('$constellation: $count'),
-      backgroundColor: _getConstellationColor(constellation).withOpacity(0.2),
-      side: BorderSide(color: _getConstellationColor(constellation)),
-    );
-  }
-
-  Widget _buildCapabilitiesCard() {
-    if (_capabilities == null) {
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '🔧 GNSS Capabilities',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            _buildCapabilityRow('Hardware Model', _capabilities!.hardwareModel),
-            _buildCapabilityRow(
-              'Software Version',
-              _capabilities!.softwareVersion,
-            ),
-            _buildCapabilityRow(
-              'Max Satellites',
-              _capabilities!.maxSatellites.toString(),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Supported Constellations:',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: _capabilities!.supportedConstellations.map((
-                constellation,
-              ) {
-                return Chip(
-                  label: Text(constellation),
-                  backgroundColor: _getConstellationColor(
-                    constellation,
-                  ).withOpacity(0.2),
-                );
-              }).toList(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCapabilityRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label),
-          Text(value, style: const TextStyle(fontFamily: 'monospace')),
-        ],
       ),
     );
   }
@@ -489,37 +732,66 @@ class _GnssDashboardState extends State<GnssDashboard> {
   Color _getFixTypeColor(GnssFixType fixType) {
     switch (fixType) {
       case GnssFixType.fix3D:
-        return Colors.green;
+        return const Color(0xFF28A745);
       case GnssFixType.fix2D:
-        return Colors.orange;
+        return const Color(0xFFFFC107);
       case GnssFixType.noFix:
-        return Colors.red;
+        return const Color(0xFFDC3545);
+      case GnssFixType.gnssDeadReckoning:
+        return const Color(0xFF17A2B8);
     }
+  }
+
+  IconData _getFixTypeIcon(GnssFixType fixType) {
+    switch (fixType) {
+      case GnssFixType.noFix:
+        return Icons.gps_off;
+      case GnssFixType.gnssDeadReckoning:
+        return Icons.gps_not_fixed;
+      case GnssFixType.fix2D:
+        return Icons.gps_fixed;
+      case GnssFixType.fix3D:
+        return Icons.gps_fixed;
+    }
+  }
+
+  Color _getAccuracyColor(double accuracy) {
+    if (accuracy <= 5) return const Color(0xFF28A745);
+    if (accuracy <= 10) return const Color(0xFFFFC107);
+    if (accuracy <= 20) return const Color(0xFFFD7E14);
+    return const Color(0xFFDC3545);
   }
 
   Color _getSignalColor(double snr) {
-    if (snr >= 30) return Colors.green;
-    if (snr >= 20) return Colors.yellow;
-    if (snr >= 10) return Colors.orange;
-    return Colors.red;
+    if (snr >= 30) return const Color(0xFF28A745);
+    if (snr >= 20) return const Color(0xFFFFC107);
+    if (snr >= 10) return const Color(0xFFFD7E14);
+    return const Color(0xFFDC3545);
   }
 
-  Color _getConstellationColor(String constellation) {
-    switch (constellation.toUpperCase()) {
-      case 'GPS':
-        return Colors.green;
-      case 'GLONASS':
-        return Colors.blue;
-      case 'GALILEO':
-        return Colors.orange;
-      case 'BEIDOU':
-        return Colors.purple;
-      case 'QZSS':
-        return Colors.red;
-      case 'IRNSS':
-        return Colors.blueGrey;
-      default:
-        return Colors.grey;
+  Color _getSnrColor(double snr) {
+    if (snr >= 30) return const Color(0xFF28A745);
+    if (snr >= 20) return const Color(0xFFFFC107);
+    if (snr >= 10) return const Color(0xFFFD7E14);
+    return const Color(0xFFDC3545);
+  }
+}
+
+class GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF333333)
+      ..strokeWidth = 0.5
+      ..style = PaintingStyle.stroke;
+
+    // Draw horizontal grid lines
+    for (int i = 0; i <= 4; i++) {
+      final y = size.height * (i / 4);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     }
   }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
