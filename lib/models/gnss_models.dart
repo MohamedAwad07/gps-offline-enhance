@@ -192,22 +192,67 @@ class GnssStatus {
   }
 
   factory GnssStatus.fromJson(Map<String, dynamic> json) {
+    // Handle timestamp - it can be either a string or a number (milliseconds)
+    DateTime timestamp;
+    final timestampValue = json['timestamp'];
+    if (timestampValue is String) {
+      timestamp = DateTime.parse(timestampValue);
+    } else if (timestampValue is num) {
+      timestamp = DateTime.fromMillisecondsSinceEpoch(timestampValue.toInt());
+    } else {
+      timestamp = DateTime.now();
+    }
+
+    // Handle fixType - it can be a string or we need to parse it
+    GnssFixType fixType;
+    final fixTypeValue = json['fixType'];
+    if (fixTypeValue is String) {
+      // Handle different fix type formats from Android
+      switch (fixTypeValue.toLowerCase()) {
+        case '3d fix':
+        case '3d':
+          fixType = GnssFixType.fix3D;
+          break;
+        case '2d fix':
+        case '2d':
+          fixType = GnssFixType.fix2D;
+          break;
+        case 'no fix':
+        case 'nofix':
+        default:
+          fixType = GnssFixType.noFix;
+          break;
+      }
+    } else {
+      fixType = GnssFixType.noFix;
+    }
+
     return GnssStatus(
-      satellites: (json['satellites'] as List)
-          .map((s) => SatelliteInfo.fromJson(s as Map<String, dynamic>))
-          .toList(),
+      satellites: (json['satellites'] as List).map((s) {
+        if (s is Map) {
+          // Convert satellite data safely
+          final Map<String, dynamic> satelliteMap = <String, dynamic>{};
+          s.forEach((key, value) {
+            if (key is String) {
+              satelliteMap[key] = value;
+            } else {
+              satelliteMap[key.toString()] = value;
+            }
+          });
+          return SatelliteInfo.fromJson(satelliteMap);
+        } else {
+          throw Exception('Invalid satellite data type: ${s.runtimeType}');
+        }
+      }).toList(),
       satellitesInView: json['satellitesInView'] as int,
       satellitesInUse: json['satellitesInUse'] as int,
       averageSnr: (json['averageSnr'] as num).toDouble(),
-      fixType: GnssFixType.values.firstWhere(
-        (e) => e.name == json['fixType'],
-        orElse: () => GnssFixType.noFix,
-      ),
+      fixType: fixType,
       accuracy: (json['accuracy'] as num).toDouble(),
       altitudeAccuracy: (json['altitudeAccuracy'] as num).toDouble(),
       speed: (json['speed'] as num).toDouble(),
       bearing: (json['bearing'] as num).toDouble(),
-      timestamp: DateTime.parse(json['timestamp'] as String),
+      timestamp: timestamp,
       isMocked: json['isMocked'] as bool,
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
@@ -270,6 +315,17 @@ class GnssMeasurement {
   }
 
   factory GnssMeasurement.fromJson(Map<String, dynamic> json) {
+    // Handle timestamp - it can be either a string or a number (milliseconds)
+    DateTime timestamp;
+    final timestampValue = json['timestamp'];
+    if (timestampValue is String) {
+      timestamp = DateTime.parse(timestampValue);
+    } else if (timestampValue is num) {
+      timestamp = DateTime.fromMillisecondsSinceEpoch(timestampValue.toInt());
+    } else {
+      timestamp = DateTime.now();
+    }
+
     return GnssMeasurement(
       svid: json['svid'] as int,
       constellation: json['constellation'] as String,
@@ -282,7 +338,7 @@ class GnssMeasurement {
       azimuth: (json['azimuth'] as num).toDouble(),
       hasAlmanac: json['hasAlmanac'] as bool,
       hasEphemeris: json['hasEphemeris'] as bool,
-      timestamp: DateTime.parse(json['timestamp'] as String),
+      timestamp: timestamp,
     );
   }
 }

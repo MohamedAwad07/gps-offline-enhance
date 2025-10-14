@@ -66,6 +66,7 @@ class GnssNativeService : Service() {
         }
 
         override fun onSatelliteStatusChanged(status: GnssStatus) {
+            Log.d(TAG, "onSatelliteStatusChanged called with ${status.satelliteCount} satellites")
             currentGnssStatus = status
             satelliteData.clear()
             
@@ -92,6 +93,7 @@ class GnssNativeService : Service() {
                 satelliteData[svid] = satelliteInfo
             }
             
+            Log.d(TAG, "Sending satellite status with ${satelliteData.size} satellites")
             // Send satellite data to Flutter
             sendEvent("satelliteStatus", getCurrentGnssStatusJson())
         }
@@ -148,6 +150,9 @@ class GnssNativeService : Service() {
             
             // Send measurement data to Flutter
             sendEvent("gnssMeasurements", getMeasurementDataJson())
+            
+            // Also create and send satellite status from measurements
+            _sendSatelliteStatusFromMeasurements()
         }
 
         override fun onStatusChanged(type: Int) {
@@ -343,11 +348,44 @@ class GnssNativeService : Service() {
      * Send event to Flutter
      */
     private fun sendEvent(eventType: String, data: Any?) {
-        eventSink?.success(mapOf(
-            "eventType" to eventType,
-            "data" to data,
-            "timestamp" to System.currentTimeMillis()
-        ))
+        Log.d(TAG, "Sending event: $eventType with data: $data")
+        if (eventSink != null) {
+            eventSink!!.success(mapOf(
+                "eventType" to eventType,
+                "data" to data,
+                "timestamp" to System.currentTimeMillis()
+            ))
+            Log.d(TAG, "Event sent successfully: $eventType")
+        } else {
+            Log.e(TAG, "Event sink is null, cannot send event: $eventType")
+        }
+    }
+
+    /**
+     * Create and send satellite status from measurements
+     */
+    private fun _sendSatelliteStatusFromMeasurements() {
+        if (measurementData.isEmpty()) return
+        
+        // Create satellite info from measurements
+        satelliteData.clear()
+        for ((svid, measurement) in measurementData) {
+            val satelliteInfo = SatelliteInfo(
+                svid = svid,
+                constellation = measurement.constellation,
+                snr = measurement.snr,
+                usedInFix = measurement.snr > 20.0, // Simple heuristic: SNR > 20 dB-Hz = used in fix
+                elevation = measurement.elevation,
+                azimuth = measurement.azimuth,
+                hasAlmanac = measurement.hasAlmanac,
+                hasEphemeris = measurement.hasEphemeris,
+                carrierFrequency = measurement.carrierFrequency
+            )
+            satelliteData[svid] = satelliteInfo
+        }
+        
+        Log.d(TAG, "Sending satellite status from measurements: ${satelliteData.size} satellites")
+        sendEvent("satelliteStatus", getCurrentGnssStatusJson())
     }
 
     /**

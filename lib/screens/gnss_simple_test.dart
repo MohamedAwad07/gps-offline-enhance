@@ -42,7 +42,10 @@ class _GnssSimpleTestState extends State<GnssSimpleTest> {
     });
 
     try {
+      print('Initializing GNSS service...');
       final initialized = await _gnssService.initialize();
+      print('GNSS service initialized: $initialized');
+
       if (initialized) {
         setState(() {
           _isInitialized = true;
@@ -50,10 +53,18 @@ class _GnssSimpleTestState extends State<GnssSimpleTest> {
         });
 
         // Get capabilities
+        print('Getting GNSS capabilities...');
         _capabilities = await _gnssService.getCapabilities();
+        print('Capabilities: ${_capabilities?.hardwareModel}');
 
         // Listen to events
-        _eventSubscription = _gnssService.eventStream.listen(_handleEvent);
+        print('Setting up event listener...');
+        _eventSubscription = _gnssService.eventStream.listen(
+          _handleEvent,
+          onError: (error) {
+            print('Event stream error: $error');
+          },
+        );
 
         setState(() {});
       } else {
@@ -62,6 +73,7 @@ class _GnssSimpleTestState extends State<GnssSimpleTest> {
         });
       }
     } catch (e) {
+      print('Initialization error: $e');
       setState(() {
         _status = 'Error: $e';
       });
@@ -69,22 +81,31 @@ class _GnssSimpleTestState extends State<GnssSimpleTest> {
   }
 
   void _handleEvent(GnssEvent event) {
+    print('Received GNSS event: ${event.runtimeType}');
     setState(() {
       switch (event.runtimeType) {
         case SatelliteStatusEvent:
           final statusEvent = event as SatelliteStatusEvent;
           _currentStatus = statusEvent.status;
           _satellites = statusEvent.status.satellites;
+          print(
+            'Updated status: ${_currentStatus?.fixType}, satellites: ${_satellites.length}',
+          );
           break;
         case MeasurementsEvent:
-          // Handle measurements if needed
+          final measurementsEvent = event as MeasurementsEvent;
+          print(
+            'Received ${measurementsEvent.measurements.length} measurements',
+          );
           break;
         case LocationUpdateEvent:
-          // Handle location updates if needed
+          final locationEvent = event as LocationUpdateEvent;
+          print('Location update: ${locationEvent.location}');
           break;
         case FirstFixEvent:
           final firstFixEvent = event as FirstFixEvent;
           _status = 'First fix obtained in ${firstFixEvent.ttffMillis}ms';
+          print('First fix: ${firstFixEvent.ttffMillis}ms');
           break;
       }
     });
@@ -98,12 +119,15 @@ class _GnssSimpleTestState extends State<GnssSimpleTest> {
     });
 
     try {
+      print('Starting GNSS tracking...');
       final started = await _gnssService.startTracking();
+      print('GNSS tracking started: $started');
       setState(() {
         _isTracking = started;
         _status = started ? 'Tracking started' : 'Failed to start tracking';
       });
     } catch (e) {
+      print('Error starting tracking: $e');
       setState(() {
         _status = 'Error starting tracking: $e';
       });

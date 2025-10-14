@@ -131,7 +131,16 @@ class GnssNativeService {
         'getCurrentGnssStatus',
       );
       if (result != null) {
-        _currentStatus = GnssStatus.fromJson(Map<String, dynamic>.from(result));
+        // Convert Map<Object?, Object?> to Map<String, dynamic> safely
+        final Map<String, dynamic> statusMap = <String, dynamic>{};
+        result.forEach((key, value) {
+          if (key is String) {
+            statusMap[key] = value;
+          } else {
+            statusMap[key.toString()] = value;
+          }
+        });
+        _currentStatus = GnssStatus.fromJson(statusMap);
         return _currentStatus;
       }
     } catch (e) {
@@ -149,9 +158,26 @@ class GnssNativeService {
       if (result != null) {
         _satellites.clear();
         _satellites.addAll(
-          result.map(
-            (data) => SatelliteInfo.fromJson(Map<String, dynamic>.from(data)),
-          ),
+          result
+              .map((data) {
+                if (data is Map) {
+                  // Convert satellite data safely
+                  final Map<String, dynamic> satelliteMap = <String, dynamic>{};
+                  data.forEach((key, value) {
+                    if (key is String) {
+                      satelliteMap[key] = value;
+                    } else {
+                      satelliteMap[key.toString()] = value;
+                    }
+                  });
+                  return SatelliteInfo.fromJson(satelliteMap);
+                } else {
+                  log('Invalid satellite data type: ${data.runtimeType}');
+                  return null;
+                }
+              })
+              .where((s) => s != null)
+              .cast<SatelliteInfo>(),
         );
         return satellites;
       }
@@ -170,9 +196,27 @@ class GnssNativeService {
       if (result != null) {
         _measurements.clear();
         _measurements.addAll(
-          result.map(
-            (data) => GnssMeasurement.fromJson(Map<String, dynamic>.from(data)),
-          ),
+          result
+              .map((data) {
+                if (data is Map) {
+                  // Convert measurement data safely
+                  final Map<String, dynamic> measurementMap =
+                      <String, dynamic>{};
+                  data.forEach((key, value) {
+                    if (key is String) {
+                      measurementMap[key] = value;
+                    } else {
+                      measurementMap[key.toString()] = value;
+                    }
+                  });
+                  return GnssMeasurement.fromJson(measurementMap);
+                } else {
+                  log('Invalid measurement data type: ${data.runtimeType}');
+                  return null;
+                }
+              })
+              .where((m) => m != null)
+              .cast<GnssMeasurement>(),
         );
         return measurements;
       }
@@ -193,9 +237,22 @@ class GnssNativeService {
   /// Handle events from native service
   void _handleEvent(dynamic event) {
     try {
-      final Map<String, dynamic> eventData = Map<String, dynamic>.from(event);
+      log('Raw GNSS event received: $event');
+
+      // Safely convert the event to Map<String, dynamic>
+      Map<String, dynamic> eventData;
+      if (event is Map) {
+        eventData = Map<String, dynamic>.from(event);
+      } else {
+        log('Invalid event type: ${event.runtimeType}');
+        return;
+      }
+
       final String eventType = eventData['eventType'] as String;
       final dynamic data = eventData['data'];
+
+      log('Received GNSS event: $eventType with data: $data');
+      log('Event data type: ${data.runtimeType}');
 
       switch (eventType) {
         case 'satelliteStatus':
@@ -221,7 +278,27 @@ class GnssNativeService {
   /// Handle satellite status updates
   void _handleSatelliteStatus(dynamic data) {
     try {
-      final Map<String, dynamic> statusData = Map<String, dynamic>.from(data);
+      log('Handling satellite status with data: $data');
+      log('Satellite status data type: ${data.runtimeType}');
+
+      // Safely convert the data to Map<String, dynamic>
+      Map<String, dynamic> statusData;
+      if (data is Map) {
+        // Convert Map<Object?, Object?> to Map<String, dynamic> safely
+        statusData = <String, dynamic>{};
+        data.forEach((key, value) {
+          if (key is String) {
+            statusData[key] = value;
+          } else {
+            statusData[key.toString()] = value;
+          }
+        });
+        log('Successfully converted to Map<String, dynamic>');
+      } else {
+        log('Invalid data type for satellite status: ${data.runtimeType}');
+        return;
+      }
+
       _currentStatus = GnssStatus.fromJson(statusData);
 
       // Update satellite list
@@ -229,11 +306,31 @@ class GnssNativeService {
           statusData['satellites'] as List<dynamic>;
       _satellites.clear();
       _satellites.addAll(
-        satellitesData.map(
-          (s) => SatelliteInfo.fromJson(Map<String, dynamic>.from(s)),
-        ),
+        satellitesData
+            .map((s) {
+              if (s is Map) {
+                // Convert satellite data safely
+                final Map<String, dynamic> satelliteMap = <String, dynamic>{};
+                s.forEach((key, value) {
+                  if (key is String) {
+                    satelliteMap[key] = value;
+                  } else {
+                    satelliteMap[key.toString()] = value;
+                  }
+                });
+                return SatelliteInfo.fromJson(satelliteMap);
+              } else {
+                log('Invalid satellite data type: ${s.runtimeType}');
+                return null;
+              }
+            })
+            .where((s) => s != null)
+            .cast<SatelliteInfo>(),
       );
 
+      log(
+        'Updated status: ${_currentStatus?.fixType}, satellites: ${_satellites.length}',
+      );
       _eventController.add(GnssEvent.satelliteStatus(_currentStatus!));
     } catch (e) {
       log('Error handling satellite status: $e');
@@ -243,12 +340,37 @@ class GnssNativeService {
   /// Handle GNSS measurements
   void _handleGnssMeasurements(dynamic data) {
     try {
-      final List<dynamic> measurementsData = data as List<dynamic>;
+      // Safely convert the data to List<dynamic>
+      List<dynamic> measurementsData;
+      if (data is List) {
+        measurementsData = data;
+      } else {
+        log('Invalid data type for GNSS measurements: ${data.runtimeType}');
+        return;
+      }
+
       _measurements.clear();
       _measurements.addAll(
-        measurementsData.map(
-          (m) => GnssMeasurement.fromJson(Map<String, dynamic>.from(m)),
-        ),
+        measurementsData
+            .map((m) {
+              if (m is Map) {
+                // Convert measurement data safely
+                final Map<String, dynamic> measurementMap = <String, dynamic>{};
+                m.forEach((key, value) {
+                  if (key is String) {
+                    measurementMap[key] = value;
+                  } else {
+                    measurementMap[key.toString()] = value;
+                  }
+                });
+                return GnssMeasurement.fromJson(measurementMap);
+              } else {
+                log('Invalid measurement data type: ${m.runtimeType}');
+                return null;
+              }
+            })
+            .where((m) => m != null)
+            .cast<GnssMeasurement>(),
       );
 
       _eventController.add(GnssEvent.measurements(_measurements));
@@ -260,7 +382,23 @@ class GnssNativeService {
   /// Handle location updates
   void _handleLocationUpdate(dynamic data) {
     try {
-      final Map<String, dynamic> locationData = Map<String, dynamic>.from(data);
+      // Safely convert the data to Map<String, dynamic>
+      Map<String, dynamic> locationData;
+      if (data is Map) {
+        // Convert Map<Object?, Object?> to Map<String, dynamic> safely
+        locationData = <String, dynamic>{};
+        data.forEach((key, value) {
+          if (key is String) {
+            locationData[key] = value;
+          } else {
+            locationData[key.toString()] = value;
+          }
+        });
+      } else {
+        log('Invalid data type for location update: ${data.runtimeType}');
+        return;
+      }
+
       _eventController.add(GnssEvent.locationUpdate(locationData));
     } catch (e) {
       log('Error handling location update: $e');
@@ -270,7 +408,23 @@ class GnssNativeService {
   /// Handle first fix event
   void _handleFirstFix(dynamic data) {
     try {
-      final Map<String, dynamic> firstFixData = Map<String, dynamic>.from(data);
+      // Safely convert the data to Map<String, dynamic>
+      Map<String, dynamic> firstFixData;
+      if (data is Map) {
+        // Convert Map<Object?, Object?> to Map<String, dynamic> safely
+        firstFixData = <String, dynamic>{};
+        data.forEach((key, value) {
+          if (key is String) {
+            firstFixData[key] = value;
+          } else {
+            firstFixData[key.toString()] = value;
+          }
+        });
+      } else {
+        log('Invalid data type for first fix: ${data.runtimeType}');
+        return;
+      }
+
       final int ttffMillis = firstFixData['ttffMillis'] as int;
       _eventController.add(GnssEvent.firstFix(ttffMillis));
     } catch (e) {
@@ -285,9 +439,16 @@ class GnssNativeService {
         'getGnssCapabilities',
       );
       if (result != null) {
-        _capabilities = GnssCapabilities.fromJson(
-          Map<String, dynamic>.from(result),
-        );
+        // Convert Map<Object?, Object?> to Map<String, dynamic> safely
+        final Map<String, dynamic> capabilitiesMap = <String, dynamic>{};
+        result.forEach((key, value) {
+          if (key is String) {
+            capabilitiesMap[key] = value;
+          } else {
+            capabilitiesMap[key.toString()] = value;
+          }
+        });
+        _capabilities = GnssCapabilities.fromJson(capabilitiesMap);
         return _capabilities;
       }
     } catch (e) {
