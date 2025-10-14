@@ -35,14 +35,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
 
   final List<Widget> _screens = [
-    const LocationTestUI(),
+    // const LocationTestUI(),
     const GnssSimpleTest(),
+    const GnssDashboard(),
     const GnssTestScreen(),
   ];
 
   final List<String> _titles = [
-    'Location Service Test',
+    // 'Location Service Test',
     'GNSS Simple Test',
+    'GNSS Dashboard',
     'GNSS Test Suite',
   ];
 
@@ -63,9 +65,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           });
         },
         items: const [
+          // BottomNavigationBarItem(
+          //   icon: Icon(Icons.location_on),
+          //   label: 'Location Test',
+          // ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.location_on),
-            label: 'Location Test',
+            icon: Icon(Icons.satellite),
+            label: 'GNSS Simple Test',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.satellite),

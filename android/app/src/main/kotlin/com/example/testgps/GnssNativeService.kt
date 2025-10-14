@@ -170,7 +170,9 @@ class GnssNativeService : Service() {
         super.onCreate()
         Log.d(TAG, "GnssNativeService created")
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        Log.d(TAG, "About to initialize GNSS capabilities...")
         initializeGnssCapabilities()
+        Log.d(TAG, "GNSS capabilities initialization completed")
     }
 
     override fun onDestroy() {
@@ -198,6 +200,7 @@ class GnssNativeService : Service() {
                     result.success(true)
                 }
                 "getGnssCapabilities" -> {
+                    Log.d(TAG, "Returning GNSS capabilities: $gnssCapabilities")
                     result.success(gnssCapabilities?.toJson())
                 }
                 "getCurrentGnssStatus" -> {
@@ -233,20 +236,49 @@ class GnssNativeService : Service() {
      * Initialize GNSS capabilities
      */
     private fun initializeGnssCapabilities() {
+        Log.d(TAG, "Starting GNSS capabilities initialization...")
+        
+        // Check if GPS hardware is available (not just if it's enabled)
+        val hasGpsHardware = packageManager.hasSystemFeature(PackageManager.FEATURE_LOCATION_GPS)
+        Log.d(TAG, "GPS hardware available: $hasGpsHardware")
+        
+        // Check if location services are available - use multiple methods
+        val hasLocationServices = try {
+            val allProviders = locationManager.allProviders
+            val hasProvider = allProviders.contains(LocationManager.GPS_PROVIDER)
+            val isEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+            val getProvider = locationManager.getProvider(LocationManager.GPS_PROVIDER) != null
+            
+            Log.d(TAG, "Location services check: allProviders=$allProviders, hasProvider=$hasProvider, isEnabled=$isEnabled, getProvider=$getProvider")
+            
+            hasProvider || isEnabled || getProvider
+        } catch (e: SecurityException) {
+            // If we don't have permission, assume it's available if hardware is present
+            Log.w(TAG, "No location permission for capabilities check, assuming available")
+            hasGpsHardware
+        }
+        
+        // Determine GNSS support - if hardware is available, assume GNSS is available
+        val hasGnss = hasGpsHardware
+        Log.d(TAG, "Final GNSS support determination: hasGnss=$hasGnss")
+        
         gnssCapabilities = GnssCapabilities(
-            hasGnss = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER),
-            hasGps = true, // Assume GPS is available if GNSS is available
-            hasGlonass = true, // Most modern devices support GLONASS
-            hasGalileo = true, // Most modern devices support Galileo
-            hasBeiDou = true, // Most modern devices support BeiDou
+            hasGnss = hasGnss,
+            hasGps = hasGpsHardware,
+            hasGlonass = hasGpsHardware, // Most modern devices support GLONASS
+            hasGalileo = hasGpsHardware, // Most modern devices support Galileo
+            hasBeiDou = hasGpsHardware, // Most modern devices support BeiDou
             hasQzss = false, // QZSS is mainly for Japan
             hasIrnss = false, // IRNSS is mainly for India
-            hasGnssMeasurements = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER),
-            hasGnssNavigationMessage = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER),
+            hasGnssMeasurements = hasGnss, // GNSS measurements available if GNSS is available
+            hasGnssNavigationMessage = hasGnss, // Navigation messages available if GNSS is available
             maxSatellites = 64, // Typical maximum for modern GNSS receivers
             hardwareModel = android.os.Build.MODEL,
             softwareVersion = android.os.Build.VERSION.RELEASE
         )
+        
+        Log.d(TAG, "GNSS Capabilities initialized: hasGnss=$hasGnss, hasGpsHardware=$hasGpsHardware, hasLocationServices=$hasLocationServices")
+        Log.d(TAG, "Final capabilities: $gnssCapabilities")
     }
 
     /**

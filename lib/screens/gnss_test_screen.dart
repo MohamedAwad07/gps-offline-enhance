@@ -132,10 +132,18 @@ class _GnssTestScreenState extends State<GnssTestScreen> {
     final stopwatch = Stopwatch()..start();
 
     try {
+      // Ensure GNSS tracking is started for the test
+      final trackingStarted = await _enhancedService.startTracking();
+      if (!trackingStarted) {
+        throw Exception('Failed to start GNSS tracking for offline test');
+      }
+
       // Test offline positioning with cold start
+      // Don't manage tracking lifecycle since we started it above
       final status = await _offlineService.getPositionWithOfflineOptimization(
         forceColdStart: true,
         timeout: const Duration(minutes: 5),
+        manageTracking: false, // Don't manage tracking lifecycle
       );
 
       stopwatch.stop();

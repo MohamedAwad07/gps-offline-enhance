@@ -47,6 +47,7 @@ class OfflinePositioningService {
   Future<GnssStatus?> getPositionWithOfflineOptimization({
     Duration? timeout,
     bool forceColdStart = false,
+    bool manageTracking = true, // New parameter to control tracking lifecycle
   }) async {
     if (!_isInitialized) {
       await initialize();
@@ -61,10 +62,12 @@ class OfflinePositioningService {
     );
 
     try {
-      // Start GNSS tracking
-      final trackingStarted = await _gnssService.startTracking();
-      if (!trackingStarted) {
-        throw Exception('Failed to start GNSS tracking');
+      // Start GNSS tracking only if we're managing the lifecycle
+      if (manageTracking) {
+        final trackingStarted = await _gnssService.startTracking();
+        if (!trackingStarted) {
+          throw Exception('Failed to start GNSS tracking');
+        }
       }
 
       // Wait for position fix with progressive acquisition
@@ -83,7 +86,10 @@ class OfflinePositioningService {
       log('Offline positioning failed: $e');
       return null;
     } finally {
-      await _gnssService.stopTracking();
+      // Only stop tracking if we started it
+      if (manageTracking) {
+        await _gnssService.stopTracking();
+      }
     }
   }
 

@@ -435,9 +435,11 @@ class GnssNativeService {
   /// Get GNSS capabilities from native service
   Future<GnssCapabilities?> _getCapabilities() async {
     try {
+      log('Requesting GNSS capabilities from native service...');
       final result = await _methodChannel.invokeMethod<Map<dynamic, dynamic>>(
         'getGnssCapabilities',
       );
+      log('Received capabilities result: $result');
       if (result != null) {
         // Convert Map<Object?, Object?> to Map<String, dynamic> safely
         final Map<String, dynamic> capabilitiesMap = <String, dynamic>{};
@@ -448,8 +450,12 @@ class GnssNativeService {
             capabilitiesMap[key.toString()] = value;
           }
         });
+        log('Converted capabilities map: $capabilitiesMap');
         _capabilities = GnssCapabilities.fromJson(capabilitiesMap);
+        log('Created capabilities object: $_capabilities');
         return _capabilities;
+      } else {
+        log('No capabilities result received from native service');
       }
     } catch (e) {
       log('Error getting GNSS capabilities: $e');
