@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:testgps/location_service.dart';
 import 'package:testgps/services/enhanced_location_service.dart';
 import 'package:testgps/models/gnss_models.dart';
+import 'package:geolocator/geolocator.dart';
 import 'dart:async';
+import 'dart:math';
 
 /// GNSS Dashboard - Real-time satellite and positioning data display
 /// Similar to GPS Test app with comprehensive GNSS information
@@ -14,6 +18,7 @@ class GnssDashboard extends StatefulWidget {
 
 class _GnssDashboardState extends State<GnssDashboard> {
   final EnhancedLocationService _enhancedService = EnhancedLocationService();
+  late final LocationService _locationService = LocationService.instance();
 
   bool _isInitialized = false;
   bool _isTracking = false;
@@ -21,6 +26,7 @@ class _GnssDashboardState extends State<GnssDashboard> {
 
   GnssStatus? _currentStatus;
   List<SatelliteInfo> _satellites = [];
+  Position? _geolocatorPosition;
 
   StreamSubscription<EnhancedLocationEvent>? _eventSubscription;
   Timer? _updateTimer;
@@ -40,14 +46,19 @@ class _GnssDashboardState extends State<GnssDashboard> {
   }
 
   Future<void> _initializeService() async {
-    final initialized = await _enhancedService.initialize();
-    if (initialized) {
+    final enhancedInitialized = await _enhancedService.initialize();
+    final locationInitialized = await _locationService.requestLocationService();
+
+    if (enhancedInitialized && locationInitialized) {
       setState(() {
         _isInitialized = true;
       });
 
       // Listen to events
       _eventSubscription = _enhancedService.eventStream.listen(_handleEvent);
+
+      // Get initial geolocator position
+      await _updateGeolocatorPosition();
 
       // Don't start tracking automatically - wait for user to press FAB
     }
@@ -87,6 +98,23 @@ class _GnssDashboardState extends State<GnssDashboard> {
         _currentStatus = status;
         _satellites = status.satellites;
       });
+    }
+
+    // Also update geolocator position
+    await _updateGeolocatorPosition();
+  }
+
+  Future<void> _updateGeolocatorPosition() async {
+    try {
+      final position = await _locationService.getCurrentPositionWithFallback(
+        timeout: const Duration(seconds: 10),
+        allowLastKnown: false,
+      );
+      setState(() {
+        _geolocatorPosition = position;
+      });
+    } catch (e) {
+      // Keep previous position if update fails
     }
   }
 
@@ -535,10 +563,199 @@ class _GnssDashboardState extends State<GnssDashboard> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+
+            // Geolocator Position (Standard GPS)
+            _buildGeolocatorPositionSection(),
+            const SizedBox(height: 16),
+
+            // Current Position Coordinates (GNSS)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A0A0A),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF333333), width: 1),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.satellite,
+                        color: Color(0xFF00E5FF),
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'GNSS Position',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Latitude
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Latitude',
+                            style: TextStyle(
+                              color: Color(0xFF6C757D),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          GestureDetector(
+                            onLongPress: () => _copyToClipboard(
+                              'Latitude: ${status.latitude.toStringAsFixed(8) ?? 'N/A'}°',
+                              'Latitude',
+                            ),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: status.latitude != null
+                                    ? const Color(0xFF00E5FF).withOpacity(0.1)
+                                    : const Color(0xFF6C757D).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: status.latitude != null
+                                      ? const Color(0xFF00E5FF).withOpacity(0.3)
+                                      : const Color(
+                                          0xFF6C757D,
+                                        ).withOpacity(0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                status.latitude != null
+                                    ? '${status.latitude.toStringAsFixed(8)}°'
+                                    : '--',
+                                style: TextStyle(
+                                  color: status.latitude != null
+                                      ? const Color(0xFF00E5FF)
+                                      : const Color(0xFF6C757D),
+                                  fontSize: 16,
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Longitude
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Longitude',
+                            style: TextStyle(
+                              color: Color(0xFF6C757D),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          GestureDetector(
+                            onLongPress: () => _copyToClipboard(
+                              'Longitude: ${status.longitude.toStringAsFixed(8) ?? 'N/A'}°',
+                              'Longitude',
+                            ),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: status.longitude != null
+                                    ? const Color(0xFF00E5FF).withOpacity(0.1)
+                                    : const Color(0xFF6C757D).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: status.longitude != null
+                                      ? const Color(0xFF00E5FF).withOpacity(0.3)
+                                      : const Color(
+                                          0xFF6C757D,
+                                        ).withOpacity(0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                status.longitude != null
+                                    ? '${status.longitude.toStringAsFixed(8)}°'
+                                    : '--',
+                                style: TextStyle(
+                                  color: status.longitude != null
+                                      ? const Color(0xFF00E5FF)
+                                      : const Color(0xFF6C757D),
+                                  fontSize: 16,
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on,
+                          color: Color(0xFF28A745),
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${status.accuracy.toStringAsFixed(1)}m accuracy',
+                          style: const TextStyle(
+                            color: Color(0xFF28A745),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${status.satellitesInUse}/${status.satellitesInView} sats',
+                          style: const TextStyle(
+                            color: Color(0xFF6C757D),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Position Difference Section
+            _buildPositionDifferenceSection(),
             const SizedBox(height: 20),
 
             // Signal Strength Chart
-            SizedBox(height: 200, child: _buildSignalStrengthChart()),
+            SizedBox(height: 240, child: _buildSignalStrengthChart()),
           ],
         ),
       ),
@@ -814,39 +1031,18 @@ class _GnssDashboardState extends State<GnssDashboard> {
                     );
 
                     return Container(
-                      width: 32,
+                      width: 40,
                       margin: const EdgeInsets.symmetric(horizontal: 2),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          // Satellite constellation type above the bar
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 2,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _getConstellationColor(
-                                satellite.constellation,
-                              ).withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(3),
-                              border: Border.all(
-                                color: _getConstellationColor(
-                                  satellite.constellation,
-                                ).withOpacity(0.5),
-                                width: 0.5,
-                              ),
-                            ),
-                            child: Text(
-                              satellite.constellation,
-                              style: TextStyle(
-                                fontSize: 7,
-                                fontFamily: 'monospace',
-                                color: _getConstellationColor(
-                                  satellite.constellation,
-                                ),
-                                fontWeight: FontWeight.w600,
-                              ),
+                          // SNR measurement above the bar
+                          Text(
+                            satellite.snr.toStringAsFixed(0),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontFamily: 'monospace',
+                              color: Color(0xFF6C757D),
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -882,12 +1078,34 @@ class _GnssDashboardState extends State<GnssDashboard> {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            satellite.snr.toStringAsFixed(0),
-                            style: const TextStyle(
-                              fontSize: 8,
-                              fontFamily: 'monospace',
-                              color: Color(0xFF6C757D),
+                          // Satellite constellation type below the ID
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 2,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _getConstellationColor(
+                                satellite.constellation,
+                              ).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(3),
+                              border: Border.all(
+                                color: _getConstellationColor(
+                                  satellite.constellation,
+                                ).withOpacity(0.5),
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Text(
+                              satellite.constellation,
+                              style: TextStyle(
+                                fontSize: 7,
+                                fontFamily: 'monospace',
+                                color: _getConstellationColor(
+                                  satellite.constellation,
+                                ),
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
@@ -950,6 +1168,482 @@ class _GnssDashboardState extends State<GnssDashboard> {
     return const Color(0xFFDC3545);
   }
 
+  Widget _buildPositionDifferenceSection() {
+    if (_geolocatorPosition == null ||
+        _currentStatus?.latitude == null ||
+        _currentStatus?.longitude == null) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A0A0A),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFF6C757D).withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: const Center(
+          child: Column(
+            children: [
+              Icon(Icons.compare_arrows, color: Color(0xFF6C757D), size: 32),
+              SizedBox(height: 8),
+              Text(
+                'Position Comparison',
+                style: TextStyle(
+                  color: Color(0xFF6C757D),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Both positions needed for comparison',
+                style: TextStyle(color: Color(0xFF6C757D), fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final distance = _calculateDistance(
+      _geolocatorPosition!.latitude,
+      _geolocatorPosition!.longitude,
+      _currentStatus!.latitude,
+      _currentStatus!.longitude,
+    );
+
+    final accuracyDiff =
+        (_geolocatorPosition!.accuracy - _currentStatus!.accuracy).abs();
+    final isGnssMoreAccurate =
+        _currentStatus!.accuracy < _geolocatorPosition!.accuracy;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A0A0A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _getDifferenceColor(distance).withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.compare_arrows,
+                color: Color(0xFFFFC107),
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Position Difference',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _getDifferenceColor(distance).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _getDifferenceColor(distance),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  _getDifferenceLabel(distance),
+                  style: TextStyle(
+                    color: _getDifferenceColor(distance),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Distance
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Distance',
+                      style: TextStyle(
+                        color: Color(0xFF6C757D),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getDifferenceColor(distance).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _getDifferenceColor(distance).withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        '${distance.toStringAsFixed(2)}m',
+                        style: TextStyle(
+                          color: _getDifferenceColor(distance),
+                          fontSize: 18,
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Accuracy Diff',
+                      style: TextStyle(
+                        color: Color(0xFF6C757D),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color:
+                            (isGnssMoreAccurate
+                                    ? const Color(0xFF28A745)
+                                    : const Color(0xFFDC3545))
+                                .withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color:
+                              (isGnssMoreAccurate
+                                      ? const Color(0xFF28A745)
+                                      : const Color(0xFFDC3545))
+                                  .withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isGnssMoreAccurate
+                                ? Icons.trending_down
+                                : Icons.trending_up,
+                            color: isGnssMoreAccurate
+                                ? const Color(0xFF28A745)
+                                : const Color(0xFFDC3545),
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${accuracyDiff.toStringAsFixed(1)}m',
+                            style: TextStyle(
+                              color: isGnssMoreAccurate
+                                  ? const Color(0xFF28A745)
+                                  : const Color(0xFFDC3545),
+                              fontSize: 16,
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Comparison Info
+          Row(
+            children: [
+              Icon(
+                isGnssMoreAccurate ? Icons.star : Icons.info_outline,
+                color: isGnssMoreAccurate
+                    ? const Color(0xFF28A745)
+                    : const Color(0xFF6C757D),
+                size: 16,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  isGnssMoreAccurate
+                      ? 'GNSS is ${accuracyDiff.toStringAsFixed(1)}m more accurate'
+                      : 'Geolocator is ${accuracyDiff.toStringAsFixed(1)}m more accurate',
+                  style: TextStyle(
+                    color: isGnssMoreAccurate
+                        ? const Color(0xFF28A745)
+                        : const Color(0xFF6C757D),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  double _calculateDistance(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
+    // Haversine formula to calculate distance between two points
+    const double earthRadius = 6371000; // Earth's radius in meters
+
+    final double dLat = _degreesToRadians(lat2 - lat1);
+    final double dLon = _degreesToRadians(lon2 - lon1);
+
+    final double a =
+        sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2);
+    final double c = 2 * asin(sqrt(a));
+
+    return earthRadius * c;
+  }
+
+  double _degreesToRadians(double degrees) {
+    return degrees * (3.14159265359 / 180);
+  }
+
+  Color _getDifferenceColor(double distance) {
+    if (distance <= 1) return const Color(0xFF28A745); // Green - excellent
+    if (distance <= 3) return const Color(0xFFFFC107); // Yellow - good
+    if (distance <= 10) return const Color(0xFFFD7E14); // Orange - fair
+    return const Color(0xFFDC3545); // Red - poor
+  }
+
+  String _getDifferenceLabel(double distance) {
+    if (distance <= 1) return 'EXCELLENT';
+    if (distance <= 3) return 'GOOD';
+    if (distance <= 10) return 'FAIR';
+    return 'POOR';
+  }
+
+  Widget _buildGeolocatorPositionSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A0A0A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF17A2B8).withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.location_searching,
+                color: Color(0xFF17A2B8),
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Geolocator Position',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_geolocatorPosition != null) ...[
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Latitude
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Latitude',
+                      style: TextStyle(
+                        color: Color(0xFF6C757D),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      onLongPress: () => _copyToClipboard(
+                        'Geolocator Latitude: ${_geolocatorPosition!.latitude.toStringAsFixed(8)}°',
+                        'Geolocator Latitude',
+                      ),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF17A2B8).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFF17A2B8).withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          '${_geolocatorPosition!.latitude.toStringAsFixed(8)}°',
+                          style: const TextStyle(
+                            color: Color(0xFF17A2B8),
+                            fontSize: 16,
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Longitude
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Longitude',
+                      style: TextStyle(
+                        color: Color(0xFF6C757D),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      onLongPress: () => _copyToClipboard(
+                        'Geolocator Longitude: ${_geolocatorPosition!.longitude.toStringAsFixed(8)}°',
+                        'Geolocator Longitude',
+                      ),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF17A2B8).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFF17A2B8).withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          '${_geolocatorPosition!.longitude.toStringAsFixed(8)}°',
+                          style: const TextStyle(
+                            color: Color(0xFF17A2B8),
+                            fontSize: 16,
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Geolocator Info
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on,
+                      color: Color(0xFF17A2B8),
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${_geolocatorPosition!.accuracy.toStringAsFixed(1)}m accuracy',
+                      style: const TextStyle(
+                        color: Color(0xFF17A2B8),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${_geolocatorPosition!.speed.toStringAsFixed(1)} m/s',
+                      style: const TextStyle(
+                        color: Color(0xFF6C757D),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ] else ...[
+            const Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.location_searching,
+                    color: Color(0xFF6C757D),
+                    size: 32,
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'No Geolocator Position',
+                    style: TextStyle(
+                      color: Color(0xFF6C757D),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Standard GPS position not available',
+                    style: TextStyle(color: Color(0xFF6C757D), fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Color _getConstellationColor(String constellation) {
     switch (constellation.toUpperCase()) {
       case 'GPS':
@@ -966,6 +1660,82 @@ class _GnssDashboardState extends State<GnssDashboard> {
         return const Color(0xFFFD7E14);
       default:
         return const Color(0xFF6C757D);
+    }
+  }
+
+  Future<void> _copyToClipboard(String text, String label) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$label copied to clipboard'),
+            backgroundColor: const Color(0xFF28A745),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to copy $label'),
+            backgroundColor: const Color(0xFFDC3545),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _copyAllCoordinates(GnssStatus status) async {
+    final coordinates =
+        '''
+Latitude: ${status.latitude.toStringAsFixed(8)}°
+Longitude: ${status.longitude.toStringAsFixed(8)}°
+Accuracy: ${status.accuracy.toStringAsFixed(1)}m
+Satellites: ${status.satellitesInUse}/${status.satellitesInView}
+Fix Type: ${status.fixType.name.toUpperCase()}
+Timestamp: ${DateTime.now().toIso8601String()}
+''';
+
+    try {
+      await Clipboard.setData(ClipboardData(text: coordinates.trim()));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All coordinates copied to clipboard'),
+            backgroundColor: Color(0xFF28A745),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(8)),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to copy coordinates'),
+            backgroundColor: Color(0xFFDC3545),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(8)),
+            ),
+          ),
+        );
+      }
     }
   }
 }

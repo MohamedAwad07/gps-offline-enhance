@@ -86,6 +86,7 @@ class LocationService {
       LocationAccuracy.low,
     ]) {
       try {
+        log('Getting current position with accuracy: $accuracy');
         return await _getCurrentPositionWithAccuracy(accuracy, timeout);
       } on TimeoutException {
         continue; // Try next accuracy level
