@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:testgps/location_service.dart';
-import 'package:testgps/services/enhanced_location_service.dart';
+import 'package:testgps/services/smart_location_service.dart' as smart;
 import 'package:testgps/models/gnss_models.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
@@ -17,19 +17,26 @@ class GnssDashboard extends StatefulWidget {
 }
 
 class _GnssDashboardState extends State<GnssDashboard> {
-  final EnhancedLocationService _enhancedService = EnhancedLocationService();
+  final smart.SmartLocationService _smartLocationService =
+      smart.SmartLocationService();
   late final LocationService _locationService = LocationService.instance();
 
   bool _isInitialized = false;
   bool _isTracking = false;
-  final bool _useGnssNative = true;
 
   GnssStatus? _currentStatus;
   List<SatelliteInfo> _satellites = [];
   Position? _geolocatorPosition;
+  Position? _smartLocationPosition;
 
-  StreamSubscription<EnhancedLocationEvent>? _eventSubscription;
+  // Smart Location Service tracking
+  smart.LocationProvider _currentProvider = smart.LocationProvider.gnss;
+  String _lastSwitchReason = '';
+  bool _isSwitchingProvider = false;
+
+  StreamSubscription<smart.SmartLocationEvent>? _smartLocationEventSubscription;
   Timer? _updateTimer;
+  Timer? _geolocatorUpdateTimer;
 
   @override
   void initState() {
@@ -39,69 +46,86 @@ class _GnssDashboardState extends State<GnssDashboard> {
 
   @override
   void dispose() {
-    _eventSubscription?.cancel();
+    _smartLocationEventSubscription?.cancel();
     _updateTimer?.cancel();
-    _enhancedService.dispose();
+    _geolocatorUpdateTimer?.cancel();
+    _smartLocationService.dispose();
     super.dispose();
   }
 
   Future<void> _initializeService() async {
-    final enhancedInitialized = await _enhancedService.initialize();
     final locationInitialized = await _locationService.requestLocationService();
 
-    if (enhancedInitialized && locationInitialized) {
+    if (locationInitialized) {
       setState(() {
         _isInitialized = true;
       });
 
-      // Listen to events
-      _eventSubscription = _enhancedService.eventStream.listen(_handleEvent);
-
       // Get initial geolocator position
       await _updateGeolocatorPosition();
 
-      // Don't start tracking automatically - wait for user to press FAB
+      // Start periodic geolocator updates every second
+      _geolocatorUpdateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        _updateGeolocatorPosition();
+      });
+
+      // SmartLocationService will be initialized when tracking starts
     }
   }
 
-  void _handleEvent(EnhancedLocationEvent event) {
+  void _handleSmartLocationEvent(smart.SmartLocationEvent event) {
     switch (event.runtimeType) {
-      case GnssStatusUpdateEvent:
-        final statusEvent = event as GnssStatusUpdateEvent;
+      case smart.PositionUpdateEvent:
+        final positionEvent = event as smart.PositionUpdateEvent;
+        setState(() {
+          _smartLocationPosition = positionEvent.position;
+          _currentProvider = positionEvent.provider;
+        });
+        break;
+      case smart.ProviderSwitchedEvent:
+        final switchEvent = event as smart.ProviderSwitchedEvent;
+        setState(() {
+          _currentProvider = switchEvent.newProvider;
+          _lastSwitchReason = switchEvent.reason;
+          _isSwitchingProvider = true;
+        });
+        // Reset switching flag after animation
+        Timer(const Duration(milliseconds: 1000), () {
+          if (mounted) {
+            setState(() {
+              _isSwitchingProvider = false;
+            });
+          }
+        });
+        break;
+      case smart.GnssStatusUpdateEvent:
+        final statusEvent = event as smart.GnssStatusUpdateEvent;
         setState(() {
           _currentStatus = statusEvent.status;
           _satellites = statusEvent.status.satellites;
         });
         break;
-      case MeasurementsUpdateEvent:
-        // Handle measurements if needed in the future
-        break;
-      case TrackingStartedEvent:
+      case smart.TrackingStartedEvent:
+        final trackingEvent = event as smart.TrackingStartedEvent;
         setState(() {
           _isTracking = true;
+          _currentProvider = trackingEvent.provider;
         });
         break;
-      case TrackingStoppedEvent:
+      case smart.TrackingStoppedEvent:
         setState(() {
           _isTracking = false;
         });
         break;
+      case smart.ServiceCompletedEvent:
+        final completedEvent = event as smart.ServiceCompletedEvent;
+        setState(() {
+          _isTracking = false;
+        });
+        // Show completion message
+        _showServiceCompletionDialog(completedEvent.finalAccuracy);
+        break;
     }
-  }
-
-  Future<void> _updateStatus() async {
-    if (!_isInitialized) return;
-
-    final status = await _enhancedService.getCurrentGnssStatus();
-    if (status != null) {
-      setState(() {
-        _currentStatus = status;
-        _satellites = status.satellites;
-      });
-    }
-
-    // Also update geolocator position
-    await _updateGeolocatorPosition();
   }
 
   Future<void> _updateGeolocatorPosition() async {
@@ -120,15 +144,21 @@ class _GnssDashboardState extends State<GnssDashboard> {
 
   Future<void> _toggleTracking() async {
     if (_isTracking) {
-      await _enhancedService.stopTracking();
+      await _smartLocationService.stopTracking();
       _updateTimer?.cancel();
       _updateTimer = null;
     } else {
-      await _enhancedService.startTracking(useGnssNative: _useGnssNative);
-      // Start periodic updates when tracking begins
-      _updateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        _updateStatus();
-      });
+      // Initialize SmartLocationService only when starting tracking
+      final smartLocationInitialized = await _smartLocationService.initialize();
+      if (smartLocationInitialized) {
+        // Listen to SmartLocationService events
+        _smartLocationEventSubscription = _smartLocationService.eventStream
+            .listen(_handleSmartLocationEvent);
+
+        await _smartLocationService.startTracking();
+
+        // No need for periodic updates - position updates come from event stream
+      }
     }
   }
 
@@ -155,6 +185,7 @@ class _GnssDashboardState extends State<GnssDashboard> {
         elevation: 0,
         centerTitle: true,
         actions: [
+          // Tracking Status
           Container(
             margin: const EdgeInsets.only(right: 16),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -211,6 +242,10 @@ class _GnssDashboardState extends State<GnssDashboard> {
                   _buildTopStatusCards(),
                   const SizedBox(height: 20),
 
+                  // Provider Method Section
+                  _buildProviderMethodSection(),
+                  const SizedBox(height: 20),
+
                   // Satellite Data Section
                   _buildSatelliteDataSection(),
                   const SizedBox(height: 20),
@@ -243,6 +278,192 @@ class _GnssDashboardState extends State<GnssDashboard> {
             _isTracking ? Icons.stop : Icons.play_arrow,
             color: Colors.white,
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProviderMethodSection() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _isTracking
+              ? _getProviderColor(_currentProvider).withOpacity(0.3)
+              : const Color(0xFF6C757D).withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  _isTracking
+                      ? _getProviderIcon(_currentProvider)
+                      : Icons.smart_toy,
+                  color: _isTracking
+                      ? _getProviderColor(_currentProvider)
+                      : const Color(0xFF6C757D),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Smart Location Method',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                if (_isTracking && _isSwitchingProvider)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFC107).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFFFFC107),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Text(
+                      'SWITCHING',
+                      style: TextStyle(
+                        color: Color(0xFFFFC107),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                else if (!_isTracking)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6C757D).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF6C757D),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Text(
+                      'READY',
+                      style: TextStyle(
+                        color: Color(0xFF6C757D),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Current Provider
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _isTracking
+                    ? _getProviderColor(_currentProvider).withOpacity(0.1)
+                    : const Color(0xFF6C757D).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _isTracking
+                      ? _getProviderColor(_currentProvider).withOpacity(0.3)
+                      : const Color(0xFF6C757D).withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: _isTracking
+                              ? _getProviderColor(_currentProvider)
+                              : const Color(0xFF6C757D),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _isTracking
+                            ? _getProviderName(_currentProvider)
+                            : 'Ready to Start',
+                        style: TextStyle(
+                          color: _isTracking
+                              ? _getProviderColor(_currentProvider)
+                              : const Color(0xFF6C757D),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _isTracking
+                        ? _getProviderDescription(_currentProvider)
+                        : '3-tier intelligent location tracking with automatic fallback',
+                    style: const TextStyle(
+                      color: Color(0xFF6C757D),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Switch Reason (if available)
+            if (_lastSwitchReason.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0A0A0A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF333333), width: 1),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.info_outline,
+                      color: Color(0xFF6C757D),
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _lastSwitchReason,
+                        style: const TextStyle(
+                          color: Color(0xFF6C757D),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -404,7 +625,9 @@ class _GnssDashboardState extends State<GnssDashboard> {
               color: const Color(0xFF1A1A1A),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: _getAccuracyColor(status.accuracy).withOpacity(0.3),
+                color: _getAccuracyColor(
+                  _getDisplayAccuracy(),
+                ).withOpacity(0.3),
                 width: 1,
               ),
             ),
@@ -428,7 +651,7 @@ class _GnssDashboardState extends State<GnssDashboard> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: _getAccuracyColor(status.accuracy),
+                          color: _getAccuracyColor(_getDisplayAccuracy()),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -440,9 +663,9 @@ class _GnssDashboardState extends State<GnssDashboard> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          status.accuracy.toStringAsFixed(0),
+                          _getDisplayAccuracy().toStringAsFixed(0),
                           style: TextStyle(
-                            color: _getAccuracyColor(status.accuracy),
+                            color: _getAccuracyColor(_getDisplayAccuracy()),
                             fontSize: 24,
                             fontWeight: FontWeight.w700,
                           ),
@@ -484,7 +707,7 @@ class _GnssDashboardState extends State<GnssDashboard> {
               Text(
                 _isTracking
                     ? 'No Satellite Data'
-                    : 'Start Tracking to View Data',
+                    : 'Smart Location Service Ready',
                 style: const TextStyle(
                   color: Color(0xFF6C757D),
                   fontSize: 16,
@@ -494,8 +717,13 @@ class _GnssDashboardState extends State<GnssDashboard> {
               if (!_isTracking) ...[
                 const SizedBox(height: 4),
                 const Text(
-                  'Press the play button to begin GNSS tracking',
+                  'Press the play button to start 3-tier location tracking',
                   style: TextStyle(color: Color(0xFF6C757D), fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'GNSS → Fused Location → Standard GPS',
+                  style: TextStyle(color: Color(0xFF6C757D), fontSize: 10),
                 ),
               ],
             ],
@@ -569,7 +797,7 @@ class _GnssDashboardState extends State<GnssDashboard> {
             _buildGeolocatorPositionSection(),
             const SizedBox(height: 16),
 
-            // Current Position Coordinates (GNSS)
+            // Current Position Coordinates (GNSS or Smart Location)
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -582,16 +810,16 @@ class _GnssDashboardState extends State<GnssDashboard> {
                 children: [
                   Row(
                     children: [
-                      const Icon(
-                        Icons.satellite,
-                        color: Color(0xFF00E5FF),
+                      Icon(
+                        _getProviderIcon(_currentProvider),
+                        color: _getProviderColor(_currentProvider),
                         size: 16,
                       ),
                       const SizedBox(width: 8),
-                      const Text(
-                        'GNSS Position',
+                      Text(
+                        '${_getProviderName(_currentProvider)} Position',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: _getProviderColor(_currentProvider),
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
@@ -617,7 +845,7 @@ class _GnssDashboardState extends State<GnssDashboard> {
                           const SizedBox(height: 4),
                           GestureDetector(
                             onLongPress: () => _copyToClipboard(
-                              'Latitude: ${status.latitude.toStringAsFixed(8)}°',
+                              'Latitude: ${_getCurrentLatitude().toStringAsFixed(8)}°',
                               'Latitude',
                             ),
                             child: Container(
@@ -627,13 +855,17 @@ class _GnssDashboardState extends State<GnssDashboard> {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: status.latitude != 0
-                                    ? const Color(0xFF00E5FF).withOpacity(0.1)
+                                color: _getCurrentLatitude() != 0
+                                    ? _getProviderColor(
+                                        _currentProvider,
+                                      ).withOpacity(0.1)
                                     : const Color(0xFF6C757D).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: status.latitude != 0
-                                      ? const Color(0xFF00E5FF).withOpacity(0.3)
+                                  color: _getCurrentLatitude() != 0
+                                      ? _getProviderColor(
+                                          _currentProvider,
+                                        ).withOpacity(0.3)
                                       : const Color(
                                           0xFF6C757D,
                                         ).withOpacity(0.3),
@@ -641,12 +873,12 @@ class _GnssDashboardState extends State<GnssDashboard> {
                                 ),
                               ),
                               child: Text(
-                                status.latitude != 0
-                                    ? '${status.latitude.toStringAsFixed(8)}°'
+                                _getCurrentLatitude() != 0
+                                    ? '${_getCurrentLatitude().toStringAsFixed(8)}°'
                                     : '--',
                                 style: TextStyle(
-                                  color: status.latitude != 0
-                                      ? const Color(0xFF00E5FF)
+                                  color: _getCurrentLatitude() != 0
+                                      ? _getProviderColor(_currentProvider)
                                       : const Color(0xFF6C757D),
                                   fontSize: 16,
                                   fontFamily: 'monospace',
@@ -673,7 +905,7 @@ class _GnssDashboardState extends State<GnssDashboard> {
                           const SizedBox(height: 4),
                           GestureDetector(
                             onLongPress: () => _copyToClipboard(
-                              'Longitude: ${status.longitude.toStringAsFixed(8)}°',
+                              'Longitude: ${_getCurrentLongitude().toStringAsFixed(8)}°',
                               'Longitude',
                             ),
                             child: Container(
@@ -683,13 +915,17 @@ class _GnssDashboardState extends State<GnssDashboard> {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: status.longitude != 0
-                                    ? const Color(0xFF00E5FF).withOpacity(0.1)
+                                color: _getCurrentLongitude() != 0
+                                    ? _getProviderColor(
+                                        _currentProvider,
+                                      ).withOpacity(0.1)
                                     : const Color(0xFF6C757D).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: status.longitude != 0
-                                      ? const Color(0xFF00E5FF).withOpacity(0.3)
+                                  color: _getCurrentLongitude() != 0
+                                      ? _getProviderColor(
+                                          _currentProvider,
+                                        ).withOpacity(0.3)
                                       : const Color(
                                           0xFF6C757D,
                                         ).withOpacity(0.3),
@@ -697,12 +933,12 @@ class _GnssDashboardState extends State<GnssDashboard> {
                                 ),
                               ),
                               child: Text(
-                                status.longitude != 0
-                                    ? '${status.longitude.toStringAsFixed(8)}°'
+                                _getCurrentLongitude() != 0
+                                    ? '${_getCurrentLongitude().toStringAsFixed(8)}°'
                                     : '--',
                                 style: TextStyle(
-                                  color: status.longitude != 0
-                                      ? const Color(0xFF00E5FF)
+                                  color: _getCurrentLongitude() != 0
+                                      ? _getProviderColor(_currentProvider)
                                       : const Color(0xFF6C757D),
                                   fontSize: 16,
                                   fontFamily: 'monospace',
@@ -726,16 +962,16 @@ class _GnssDashboardState extends State<GnssDashboard> {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          '${status.accuracy.toStringAsFixed(1)}m accuracy',
-                          style: const TextStyle(
-                            color: Color(0xFF28A745),
+                          '${_getCurrentAccuracy().toStringAsFixed(1)}m accuracy',
+                          style: TextStyle(
+                            color: _getProviderColor(_currentProvider),
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                         const Spacer(),
                         Text(
-                          '${status.satellitesInUse}/${status.satellitesInView} sats',
+                          _getProviderName(_currentProvider),
                           style: const TextStyle(
                             color: Color(0xFF6C757D),
                             fontSize: 12,
@@ -754,8 +990,8 @@ class _GnssDashboardState extends State<GnssDashboard> {
             _buildPositionDifferenceSection(),
             const SizedBox(height: 20),
 
-            // Signal Strength Chart
-            SizedBox(height: 240, child: _buildSignalStrengthChart()),
+            // Dynamic Display: Bar Graph for GNSS, ListView for Fused Location
+            SizedBox(height: 240, child: _buildDynamicDisplay()),
           ],
         ),
       ),
@@ -994,6 +1230,252 @@ class _GnssDashboardState extends State<GnssDashboard> {
   //     ),
   //   );
   // }
+
+  Widget _buildDynamicDisplay() {
+    if (_currentProvider == smart.LocationProvider.fusedLocation) {
+      // Show ListView of position values for Fused Location
+      return _buildPositionHistoryList();
+    } else {
+      // Show bar graph for GNSS or other providers
+      return _buildSignalStrengthChart();
+    }
+  }
+
+  Widget _buildPositionHistoryList() {
+    final positionHistory = _smartLocationService.positionHistory;
+    if (positionHistory.isEmpty) {
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A0A0A),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF333333), width: 1),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.location_searching,
+                color: Color(0xFF6C757D),
+                size: 48,
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Waiting for Position Updates',
+                style: TextStyle(
+                  color: Color(0xFF6C757D),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Fused Location is collecting position data...',
+                style: TextStyle(color: Color(0xFF6C757D), fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A0A0A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF333333), width: 1),
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Color(0xFF333333), width: 1),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.location_searching,
+                  color: Color(0xFF28A745),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Fused Location Stream',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF28A745).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFF28A745),
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    '${positionHistory.length} positions',
+                    style: const TextStyle(
+                      color: Color(0xFF28A745),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Position List
+          Expanded(
+            child: ListView.builder(
+              itemCount: positionHistory.length,
+              reverse: true, // Show newest first
+              itemBuilder: (context, index) {
+                final position =
+                    positionHistory[positionHistory.length - 1 - index];
+                final isLatest = index == 0;
+
+                return Container(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isLatest
+                        ? const Color(0xFF28A745).withOpacity(0.1)
+                        : const Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isLatest
+                          ? const Color(0xFF28A745).withOpacity(0.3)
+                          : const Color(0xFF333333),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      // Position number
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: isLatest
+                              ? const Color(0xFF28A745)
+                              : const Color(0xFF6C757D),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${positionHistory.length - index}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+
+                      // Position data
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  '${position.latitude.toStringAsFixed(6)}°',
+                                  style: TextStyle(
+                                    color: isLatest
+                                        ? const Color(0xFF28A745)
+                                        : Colors.white,
+                                    fontSize: 14,
+                                    fontFamily: 'monospace',
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${position.longitude.toStringAsFixed(6)}°',
+                                  style: TextStyle(
+                                    color: isLatest
+                                        ? const Color(0xFF28A745)
+                                        : Colors.white,
+                                    fontSize: 14,
+                                    fontFamily: 'monospace',
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.center_focus_strong,
+                                  color: _getAccuracyColor(position.accuracy),
+                                  size: 12,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${position.accuracy.toStringAsFixed(1)}m',
+                                  style: TextStyle(
+                                    color: _getAccuracyColor(position.accuracy),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  _formatTimestamp(position.timestamp),
+                                  style: const TextStyle(
+                                    color: Color(0xFF6C757D),
+                                    fontSize: 10,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTimestamp(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+
+    if (difference.inSeconds < 60) {
+      return '${difference.inSeconds}s ago';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return '${difference.inHours}h ago';
+    }
+  }
 
   Widget _buildSignalStrengthChart() {
     final usedSatellites = _satellites.where((s) => s.usedInFix).toList();
@@ -1693,6 +2175,190 @@ class _GnssDashboardState extends State<GnssDashboard> {
           ),
         );
       }
+    }
+  }
+
+  void _showServiceCompletionDialog(double finalAccuracy) {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFF28A745), width: 2),
+          ),
+          title: Row(
+            children: [
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFF28A745),
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Service Completed',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF28A745).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFF28A745).withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.center_focus_strong,
+                        color: Color(0xFF28A745),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Final Accuracy: ',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        '${finalAccuracy.toStringAsFixed(1)}m',
+                        style: const TextStyle(
+                          color: Color(0xFF28A745),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFF28A745),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'OK',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Position helper methods
+  double _getCurrentLatitude() {
+    if (_smartLocationPosition != null) {
+      return _smartLocationPosition!.latitude;
+    } else if (_currentStatus != null) {
+      return _currentStatus!.latitude;
+    }
+    return 0.0;
+  }
+
+  double _getCurrentLongitude() {
+    if (_smartLocationPosition != null) {
+      return _smartLocationPosition!.longitude;
+    } else if (_currentStatus != null) {
+      return _currentStatus!.longitude;
+    }
+    return 0.0;
+  }
+
+  double _getCurrentAccuracy() {
+    if (_smartLocationPosition != null) {
+      return _smartLocationPosition!.accuracy;
+    } else if (_currentStatus != null) {
+      return _currentStatus!.accuracy;
+    }
+    return 0.0;
+  }
+
+  double _getDisplayAccuracy() {
+    // Use global accuracy from SmartLocationService
+    return _smartLocationService.currentGlobalAccuracy > 0
+        ? _smartLocationService.currentGlobalAccuracy
+        : _getCurrentAccuracy();
+  }
+
+  // Provider helper methods
+  Color _getProviderColor(smart.LocationProvider provider) {
+    switch (provider) {
+      case smart.LocationProvider.gnss:
+        return const Color(0xFF00E5FF); // Cyan for GNSS
+      case smart.LocationProvider.fusedLocation:
+        return const Color(0xFF28A745); // Green for Fused Location
+      case smart.LocationProvider.standard:
+        return const Color(0xFF17A2B8); // Blue for Standard
+    }
+  }
+
+  IconData _getProviderIcon(smart.LocationProvider provider) {
+    switch (provider) {
+      case smart.LocationProvider.gnss:
+        return Icons.satellite;
+      case smart.LocationProvider.fusedLocation:
+        return Icons.location_searching;
+      case smart.LocationProvider.standard:
+        return Icons.location_on;
+    }
+  }
+
+  String _getProviderName(smart.LocationProvider provider) {
+    switch (provider) {
+      case smart.LocationProvider.gnss:
+        return 'GNSS Native';
+      case smart.LocationProvider.fusedLocation:
+        return 'Fused Location';
+      case smart.LocationProvider.standard:
+        return 'Standard GPS';
+    }
+  }
+
+  String _getProviderDescription(smart.LocationProvider provider) {
+    switch (provider) {
+      case smart.LocationProvider.gnss:
+        return 'Direct GNSS chip access with 9+ satellites required';
+      case smart.LocationProvider.fusedLocation:
+        return 'Google Play Services with best for navigation accuracy';
+      case smart.LocationProvider.standard:
+        return 'Standard location service as final fallback';
     }
   }
 }

@@ -109,7 +109,6 @@ class EnhancedLocationService {
     Duration timeout = const Duration(minutes: 5),
     bool allowLastKnown = true,
     Duration maxLastKnownAge = const Duration(minutes: 15),
-    bool preferGnssNative = false,
     int? minSatellites,
     double? minAccuracy,
   }) async {
@@ -121,14 +120,12 @@ class EnhancedLocationService {
       // Use Smart Location Service with intelligent provider selection
       return await _smartLocationService.getCurrentPosition(
         timeout: timeout,
-        preferGnss: preferGnssNative,
         minSatellites: minSatellites,
         minAccuracy: minAccuracy,
       );
     } else {
       // Fallback to individual services
-      final shouldUseGnssNative =
-          preferGnssNative || _isOffline || _useGnssNative;
+      final shouldUseGnssNative = _isOffline || _useGnssNative;
 
       if (shouldUseGnssNative && _gnssService.isTracking) {
         return await _getPositionFromGnssNative(timeout);
@@ -158,7 +155,6 @@ class EnhancedLocationService {
       // Use Smart Location Service for tracking
       final started = await _smartLocationService.startTracking(
         updateInterval: updateInterval,
-        preferGnss: useGnssNative,
         minSatellites: minSatellites,
         minAccuracy: minAccuracy,
       );

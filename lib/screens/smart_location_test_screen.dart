@@ -139,7 +139,6 @@ class _SmartLocationTestScreenState extends State<SmartLocationTestScreen> {
 
       final position = await _smartLocationService.getCurrentPosition(
         timeout: const Duration(minutes: 2),
-        preferGnss: !_testFusedLocationOnly,
         minSatellites: 9,
         minAccuracy: 10.0,
       );
@@ -165,7 +164,6 @@ class _SmartLocationTestScreenState extends State<SmartLocationTestScreen> {
     try {
       final started = await _smartLocationService.startTracking(
         updateInterval: const Duration(seconds: 2),
-        preferGnss: !_testFusedLocationOnly,
         minSatellites: 9,
         minAccuracy: 10.0,
       );

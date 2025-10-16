@@ -34,7 +34,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   final List<Widget> _screens = [
     const GnssDashboard(),
-    const FusedLocationTestScreen(),
+    // const FusedLocationTestScreen(),
   ];
 
 
@@ -54,10 +54,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             icon: Icon(Icons.satellite),
             label: 'GNSS Dashboard',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.location_on),
-            label: 'Fused Location',
-          ),
+          // BottomNavigationBarItem(
+          //   icon: Icon(Icons.location_on),
+          //   label: 'Fused Location',
+          // ),
         ],
       ),
     );
