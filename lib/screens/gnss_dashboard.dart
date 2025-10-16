@@ -617,7 +617,7 @@ class _GnssDashboardState extends State<GnssDashboard> {
                           const SizedBox(height: 4),
                           GestureDetector(
                             onLongPress: () => _copyToClipboard(
-                              'Latitude: ${status.latitude.toStringAsFixed(8) ?? 'N/A'}°',
+                              'Latitude: ${status.latitude.toStringAsFixed(8)}°',
                               'Latitude',
                             ),
                             child: Container(
@@ -627,12 +627,12 @@ class _GnssDashboardState extends State<GnssDashboard> {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: status.latitude != null
+                                color: status.latitude != 0
                                     ? const Color(0xFF00E5FF).withOpacity(0.1)
                                     : const Color(0xFF6C757D).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: status.latitude != null
+                                  color: status.latitude != 0
                                       ? const Color(0xFF00E5FF).withOpacity(0.3)
                                       : const Color(
                                           0xFF6C757D,
@@ -641,11 +641,11 @@ class _GnssDashboardState extends State<GnssDashboard> {
                                 ),
                               ),
                               child: Text(
-                                status.latitude != null
+                                status.latitude != 0
                                     ? '${status.latitude.toStringAsFixed(8)}°'
                                     : '--',
                                 style: TextStyle(
-                                  color: status.latitude != null
+                                  color: status.latitude != 0
                                       ? const Color(0xFF00E5FF)
                                       : const Color(0xFF6C757D),
                                   fontSize: 16,
@@ -673,7 +673,7 @@ class _GnssDashboardState extends State<GnssDashboard> {
                           const SizedBox(height: 4),
                           GestureDetector(
                             onLongPress: () => _copyToClipboard(
-                              'Longitude: ${status.longitude.toStringAsFixed(8) ?? 'N/A'}°',
+                              'Longitude: ${status.longitude.toStringAsFixed(8)}°',
                               'Longitude',
                             ),
                             child: Container(
@@ -683,12 +683,12 @@ class _GnssDashboardState extends State<GnssDashboard> {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: status.longitude != null
+                                color: status.longitude != 0
                                     ? const Color(0xFF00E5FF).withOpacity(0.1)
                                     : const Color(0xFF6C757D).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: status.longitude != null
+                                  color: status.longitude != 0
                                       ? const Color(0xFF00E5FF).withOpacity(0.3)
                                       : const Color(
                                           0xFF6C757D,
@@ -697,11 +697,11 @@ class _GnssDashboardState extends State<GnssDashboard> {
                                 ),
                               ),
                               child: Text(
-                                status.longitude != null
+                                status.longitude != 0
                                     ? '${status.longitude.toStringAsFixed(8)}°'
                                     : '--',
                                 style: TextStyle(
-                                  color: status.longitude != null
+                                  color: status.longitude != 0
                                       ? const Color(0xFF00E5FF)
                                       : const Color(0xFF6C757D),
                                   fontSize: 16,
@@ -1689,49 +1689,6 @@ class _GnssDashboardState extends State<GnssDashboard> {
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _copyAllCoordinates(GnssStatus status) async {
-    final coordinates =
-        '''
-Latitude: ${status.latitude.toStringAsFixed(8)}°
-Longitude: ${status.longitude.toStringAsFixed(8)}°
-Accuracy: ${status.accuracy.toStringAsFixed(1)}m
-Satellites: ${status.satellitesInUse}/${status.satellitesInView}
-Fix Type: ${status.fixType.name.toUpperCase()}
-Timestamp: ${DateTime.now().toIso8601String()}
-''';
-
-    try {
-      await Clipboard.setData(ClipboardData(text: coordinates.trim()));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('All coordinates copied to clipboard'),
-            backgroundColor: Color(0xFF28A745),
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(8)),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to copy coordinates'),
-            backgroundColor: Color(0xFFDC3545),
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(8)),
             ),
           ),
         );

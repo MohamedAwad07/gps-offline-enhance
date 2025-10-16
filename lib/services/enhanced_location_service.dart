@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'package:geolocator/geolocator.dart';
 import 'package:testgps/location_service.dart';
 import 'package:testgps/services/gnss_native_service.dart';
+import 'package:testgps/services/smart_location_service.dart';
 import 'package:testgps/models/gnss_models.dart';
 
 /// Enhanced Location Service that combines geolocator and native GNSS
@@ -15,10 +16,13 @@ class EnhancedLocationService {
 
   final LocationService _locationService = LocationService.instance();
   final GnssNativeService _gnssService = GnssNativeService();
+  final SmartLocationService _smartLocationService = SmartLocationService();
 
   bool _isInitialized = false;
   bool _useGnssNative = false;
+  bool _useSmartLocation = true;
   StreamSubscription<GnssEvent>? _gnssEventSubscription;
+  StreamSubscription<SmartLocationEvent>? _smartLocationEventSubscription;
 
   // Current status
   GnssStatus? _currentGnssStatus;
@@ -41,6 +45,9 @@ class EnhancedLocationService {
   /// Whether using GNSS native service
   bool get useGnssNative => _useGnssNative;
 
+  /// Whether using smart location service
+  bool get useSmartLocation => _useSmartLocation;
+
   /// Whether service is initialized
   bool get isInitialized => _isInitialized;
 
@@ -49,22 +56,43 @@ class EnhancedLocationService {
     if (_isInitialized) return true;
 
     try {
-      // Initialize GNSS native service
-      final gnssInitialized = await _gnssService.initialize();
-      if (gnssInitialized) {
-        log('GNSS native service initialized successfully');
+      // Initialize Smart Location Service (includes GNSS and Fused Location)
+      final smartInitialized = await _smartLocationService.initialize();
+      if (smartInitialized) {
+        log('Smart Location Service initialized successfully');
+        _useSmartLocation = true;
 
-        // Listen to GNSS events
-        _gnssEventSubscription = _gnssService.eventStream.listen(
-          _handleGnssEvent,
-          onError: (error) {
-            log('GNSS event error: $error');
-          },
-        );
+        // Listen to smart location events
+        _smartLocationEventSubscription = _smartLocationService.eventStream
+            .listen(
+              _handleSmartLocationEvent,
+              onError: (error) {
+                log('Smart location event error: $error');
+              },
+            );
       } else {
         log(
-          'GNSS native service initialization failed, falling back to geolocator only',
+          'Smart Location Service initialization failed, falling back to individual services',
         );
+        _useSmartLocation = false;
+
+        // Initialize GNSS native service as fallback
+        final gnssInitialized = await _gnssService.initialize();
+        if (gnssInitialized) {
+          log('GNSS native service initialized successfully');
+
+          // Listen to GNSS events
+          _gnssEventSubscription = _gnssService.eventStream.listen(
+            _handleGnssEvent,
+            onError: (error) {
+              log('GNSS event error: $error');
+            },
+          );
+        } else {
+          log(
+            'GNSS native service initialization failed, falling back to geolocator only',
+          );
+        }
       }
 
       _isInitialized = true;
@@ -82,24 +110,36 @@ class EnhancedLocationService {
     bool allowLastKnown = true,
     Duration maxLastKnownAge = const Duration(minutes: 15),
     bool preferGnssNative = false,
+    int? minSatellites,
+    double? minAccuracy,
   }) async {
     if (!_isInitialized) {
       await initialize();
     }
 
-    // Check if we should use GNSS native
-    final shouldUseGnssNative =
-        preferGnssNative || _isOffline || _useGnssNative;
-
-    if (shouldUseGnssNative && _gnssService.isTracking) {
-      return await _getPositionFromGnssNative(timeout);
-    } else {
-      // Use existing LocationService with fallback
-      return await _locationService.getCurrentPositionWithFallback(
+    if (_useSmartLocation) {
+      // Use Smart Location Service with intelligent provider selection
+      return await _smartLocationService.getCurrentPosition(
         timeout: timeout,
-        allowLastKnown: allowLastKnown,
-        maxLastKnownAge: maxLastKnownAge,
+        preferGnss: preferGnssNative,
+        minSatellites: minSatellites,
+        minAccuracy: minAccuracy,
       );
+    } else {
+      // Fallback to individual services
+      final shouldUseGnssNative =
+          preferGnssNative || _isOffline || _useGnssNative;
+
+      if (shouldUseGnssNative && _gnssService.isTracking) {
+        return await _getPositionFromGnssNative(timeout);
+      } else {
+        // Use existing LocationService with fallback
+        return await _locationService.getCurrentPositionWithFallback(
+          timeout: timeout,
+          allowLastKnown: allowLastKnown,
+          maxLastKnownAge: maxLastKnownAge,
+        );
+      }
     }
   }
 
@@ -107,42 +147,73 @@ class EnhancedLocationService {
   Future<bool> startTracking({
     bool useGnssNative = false,
     Duration updateInterval = const Duration(seconds: 1),
+    int? minSatellites,
+    double? minAccuracy,
   }) async {
     if (!_isInitialized) {
       await initialize();
     }
 
-    _useGnssNative = useGnssNative;
+    if (_useSmartLocation) {
+      // Use Smart Location Service for tracking
+      final started = await _smartLocationService.startTracking(
+        updateInterval: updateInterval,
+        preferGnss: useGnssNative,
+        minSatellites: minSatellites,
+        minAccuracy: minAccuracy,
+      );
 
-    if (useGnssNative) {
-      // Start GNSS native tracking
-      final started = await _gnssService.startTracking();
       if (started) {
-        log('GNSS native tracking started');
+        log('Smart location tracking started');
         _eventController.add(EnhancedLocationEvent.trackingStarted(true));
         return true;
       } else {
-        log('Failed to start GNSS native tracking, falling back to geolocator');
-        _useGnssNative = false;
+        log('Failed to start smart location tracking');
+        return false;
       }
-    }
+    } else {
+      // Fallback to individual services
+      _useGnssNative = useGnssNative;
 
-    // Fallback to geolocator tracking
-    try {
-      // Note: This is a simplified implementation
-      // In a real app, you'd want to implement proper location stream handling
-      log('Geolocator tracking started');
-      _eventController.add(EnhancedLocationEvent.trackingStarted(false));
-      return true;
-    } catch (e) {
-      log('Failed to start geolocator tracking: $e');
-      return false;
+      if (useGnssNative) {
+        // Start GNSS native tracking
+        final started = await _gnssService.startTracking();
+        if (started) {
+          log('GNSS native tracking started');
+          _eventController.add(EnhancedLocationEvent.trackingStarted(true));
+          return true;
+        } else {
+          log(
+            'Failed to start GNSS native tracking, falling back to geolocator',
+          );
+          _useGnssNative = false;
+        }
+      }
+
+      // Fallback to geolocator tracking
+      try {
+        // Note: This is a simplified implementation
+        // In a real app, you'd want to implement proper location stream handling
+        log('Geolocator tracking started');
+        _eventController.add(EnhancedLocationEvent.trackingStarted(false));
+        return true;
+      } catch (e) {
+        log('Failed to start geolocator tracking: $e');
+        return false;
+      }
     }
   }
 
   /// Stop location tracking
   Future<bool> stopTracking() async {
-    if (_useGnssNative) {
+    if (_useSmartLocation) {
+      final stopped = await _smartLocationService.stopTracking();
+      if (stopped) {
+        log('Smart location tracking stopped');
+        _eventController.add(EnhancedLocationEvent.trackingStopped());
+        return true;
+      }
+    } else if (_useGnssNative) {
       final stopped = await _gnssService.stopTracking();
       if (stopped) {
         log('GNSS native tracking stopped');
@@ -191,6 +262,46 @@ class EnhancedLocationService {
     } catch (e) {
       _isOffline = true;
       return true;
+    }
+  }
+
+  /// Handle Smart Location events
+  void _handleSmartLocationEvent(SmartLocationEvent event) {
+    switch (event.runtimeType) {
+      case PositionUpdateEvent:
+        final positionEvent = event as PositionUpdateEvent;
+        _currentPosition = positionEvent.position;
+        _eventController.add(
+          EnhancedLocationEvent.locationUpdate({
+            'latitude': positionEvent.position.latitude,
+            'longitude': positionEvent.position.longitude,
+            'accuracy': positionEvent.position.accuracy,
+            'timestamp':
+                positionEvent.position.timestamp.millisecondsSinceEpoch,
+            'provider': positionEvent.provider.name,
+          }),
+        );
+        break;
+      case GnssStatusUpdateEvent:
+        final statusEvent = event as GnssStatusUpdateEvent;
+        _currentGnssStatus = statusEvent.status;
+        _eventController.add(
+          EnhancedLocationEvent.gnssStatusUpdate(statusEvent.status),
+        );
+        break;
+      case ProviderSwitchedEvent:
+        final switchEvent = event as ProviderSwitchedEvent;
+        log(
+          'Location provider switched to ${switchEvent.newProvider.name}: ${switchEvent.reason}',
+        );
+        _eventController.add(
+          EnhancedLocationEvent.locationUpdate({
+            'provider': switchEvent.newProvider.name,
+            'reason': switchEvent.reason,
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          }),
+        );
+        break;
     }
   }
 
@@ -261,8 +372,10 @@ class EnhancedLocationService {
   /// Dispose resources
   void dispose() {
     _gnssEventSubscription?.cancel();
+    _smartLocationEventSubscription?.cancel();
     _eventController.close();
     _gnssService.dispose();
+    _smartLocationService.dispose();
     _isInitialized = false;
   }
 }

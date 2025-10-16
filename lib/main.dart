@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:testgps/screens/gnss_dashboard.dart';
+import 'package:testgps/screens/fused_location_test_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -29,9 +30,36 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
+  int _selectedIndex = 0;
+
+  final List<Widget> _screens = [
+    const GnssDashboard(),
+    const FusedLocationTestScreen(),
+  ];
+
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(body: const GnssDashboard());
+    return Scaffold(
+      body: _screens[_selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.satellite),
+            label: 'GNSS Dashboard',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.location_on),
+            label: 'Fused Location',
+          ),
+        ],
+      ),
+    );
   }
 }

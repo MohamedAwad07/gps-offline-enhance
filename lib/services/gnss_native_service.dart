@@ -46,6 +46,13 @@ class GnssNativeService {
   /// Whether GNSS tracking is active
   bool get isTracking => _isTracking;
 
+  /// Helper method to safely add events to the stream
+  void _addEvent(GnssEvent event) {
+    if (!_eventController.isClosed) {
+      _eventController.add(event);
+    }
+  }
+
   /// Initialize the GNSS native service
   Future<bool> initialize() async {
     if (_isInitialized) return true;
@@ -230,14 +237,16 @@ class GnssNativeService {
   void dispose() {
     stopTracking();
     _eventSubscription?.cancel();
-    _eventController.close();
+    if (!_eventController.isClosed) {
+      _eventController.close();
+    }
     _isInitialized = false;
   }
 
   /// Handle events from native service
   void _handleEvent(dynamic event) {
     try {
-      log('Raw GNSS event received: $event');
+      //   log('Raw GNSS event received: $event');
 
       // Safely convert the event to Map<String, dynamic>
       Map<String, dynamic> eventData;
@@ -251,7 +260,7 @@ class GnssNativeService {
       final String eventType = eventData['eventType'] as String;
       final dynamic data = eventData['data'];
 
-      log('Received GNSS event: $eventType with data: $data');
+      //   log('Received GNSS event: $eventType with data: $data');
       log('Event data type: ${data.runtimeType}');
 
       switch (eventType) {
@@ -278,8 +287,8 @@ class GnssNativeService {
   /// Handle satellite status updates
   void _handleSatelliteStatus(dynamic data) {
     try {
-      log('Handling satellite status with data: $data');
-      log('Satellite status data type: ${data.runtimeType}');
+      //   log('Handling satellite status with data: $data');
+      //   log('Satellite status data type: ${data.runtimeType}');
 
       // Safely convert the data to Map<String, dynamic>
       Map<String, dynamic> statusData;
@@ -301,37 +310,14 @@ class GnssNativeService {
 
       _currentStatus = GnssStatus.fromJson(statusData);
 
-      // Update satellite list
-      final List<dynamic> satellitesData =
-          statusData['satellites'] as List<dynamic>;
+      // Update satellite list from the already processed status
       _satellites.clear();
-      _satellites.addAll(
-        satellitesData
-            .map((s) {
-              if (s is Map) {
-                // Convert satellite data safely
-                final Map<String, dynamic> satelliteMap = <String, dynamic>{};
-                s.forEach((key, value) {
-                  if (key is String) {
-                    satelliteMap[key] = value;
-                  } else {
-                    satelliteMap[key.toString()] = value;
-                  }
-                });
-                return SatelliteInfo.fromJson(satelliteMap);
-              } else {
-                log('Invalid satellite data type: ${s.runtimeType}');
-                return null;
-              }
-            })
-            .where((s) => s != null)
-            .cast<SatelliteInfo>(),
-      );
+      _satellites.addAll(_currentStatus!.satellites);
 
       log(
         'Updated status: ${_currentStatus?.fixType}, satellites: ${_satellites.length}',
       );
-      _eventController.add(GnssEvent.satelliteStatus(_currentStatus!));
+      _addEvent(GnssEvent.satelliteStatus(_currentStatus!));
     } catch (e) {
       log('Error handling satellite status: $e');
     }
@@ -373,7 +359,7 @@ class GnssNativeService {
             .cast<GnssMeasurement>(),
       );
 
-      _eventController.add(GnssEvent.measurements(_measurements));
+      _addEvent(GnssEvent.measurements(_measurements));
     } catch (e) {
       log('Error handling GNSS measurements: $e');
     }
@@ -399,7 +385,7 @@ class GnssNativeService {
         return;
       }
 
-      _eventController.add(GnssEvent.locationUpdate(locationData));
+      _addEvent(GnssEvent.locationUpdate(locationData));
     } catch (e) {
       log('Error handling location update: $e');
     }
@@ -426,7 +412,7 @@ class GnssNativeService {
       }
 
       final int ttffMillis = firstFixData['ttffMillis'] as int;
-      _eventController.add(GnssEvent.firstFix(ttffMillis));
+      _addEvent(GnssEvent.firstFix(ttffMillis));
     } catch (e) {
       log('Error handling first fix: $e');
     }
@@ -439,7 +425,7 @@ class GnssNativeService {
       final result = await _methodChannel.invokeMethod<Map<dynamic, dynamic>>(
         'getGnssCapabilities',
       );
-      log('Received capabilities result: $result');
+      //   log('Received capabilities result: $result');
       if (result != null) {
         // Convert Map<Object?, Object?> to Map<String, dynamic> safely
         final Map<String, dynamic> capabilitiesMap = <String, dynamic>{};
@@ -450,9 +436,9 @@ class GnssNativeService {
             capabilitiesMap[key.toString()] = value;
           }
         });
-        log('Converted capabilities map: $capabilitiesMap');
+        //      log('Converted capabilities map: $capabilitiesMap');
         _capabilities = GnssCapabilities.fromJson(capabilitiesMap);
-        log('Created capabilities object: $_capabilities');
+        //     log('Created capabilities object: $_capabilities');
         return _capabilities;
       } else {
         log('No capabilities result received from native service');

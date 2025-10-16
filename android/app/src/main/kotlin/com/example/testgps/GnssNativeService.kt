@@ -103,7 +103,7 @@ class GnssNativeService : Service() {
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
             currentLocation = location
-            Log.d(TAG, "Location updated: lat=${location.latitude}, lon=${location.longitude}, accuracy=${location.accuracy}m")
+          //  Log.d(TAG, "Location updated: lat=${location.latitude}, lon=${location.longitude}, accuracy=${location.accuracy}m")
             sendEvent("locationUpdate", locationToJson(location))
         }
 
@@ -116,7 +116,7 @@ class GnssNativeService : Service() {
         }
 
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {
-            Log.d(TAG, "Location provider status changed: $provider, status: $status")
+        //    Log.d(TAG, "Location provider status changed: $provider, status: $status")
         }
     }
     
@@ -124,7 +124,7 @@ class GnssNativeService : Service() {
     private val gnssMeasurementsCallback = object : GnssMeasurementsEvent.Callback() {
         override fun onGnssMeasurementsReceived(event: GnssMeasurementsEvent) {
             val measurements = event.measurements
-            Log.d(TAG, "Received ${measurements.size} GNSS measurements")
+         //   Log.d(TAG, "Received ${measurements.size} GNSS measurements")
             
             for (measurement in measurements) {
                 val svid = measurement.svid
@@ -156,7 +156,7 @@ class GnssNativeService : Service() {
         }
 
         override fun onStatusChanged(type: Int) {
-            Log.d(TAG, "GNSS measurements status changed: $type")
+           // Log.d(TAG, "GNSS measurements status changed: $type")
         }
     }
 
@@ -200,7 +200,7 @@ class GnssNativeService : Service() {
                     result.success(true)
                 }
                 "getGnssCapabilities" -> {
-                    Log.d(TAG, "Returning GNSS capabilities: $gnssCapabilities")
+                //    Log.d(TAG, "Returning GNSS capabilities: $gnssCapabilities")
                     result.success(gnssCapabilities?.toJson())
                 }
                 "getCurrentGnssStatus" -> {
@@ -249,7 +249,7 @@ class GnssNativeService : Service() {
             val isEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
             val getProvider = locationManager.getProvider(LocationManager.GPS_PROVIDER) != null
             
-            Log.d(TAG, "Location services check: allProviders=$allProviders, hasProvider=$hasProvider, isEnabled=$isEnabled, getProvider=$getProvider")
+       //     Log.d(TAG, "Location services check: allProviders=$allProviders, hasProvider=$hasProvider, isEnabled=$isEnabled, getProvider=$getProvider")
             
             hasProvider || isEnabled || getProvider
         } catch (e: SecurityException) {
@@ -277,7 +277,7 @@ class GnssNativeService : Service() {
             softwareVersion = android.os.Build.VERSION.RELEASE
         )
         
-        Log.d(TAG, "GNSS Capabilities initialized: hasGnss=$hasGnss, hasGpsHardware=$hasGpsHardware, hasLocationServices=$hasLocationServices")
+    //    Log.d(TAG, "GNSS Capabilities initialized: hasGnss=$hasGnss, hasGpsHardware=$hasGpsHardware, hasLocationServices=$hasLocationServices")
         Log.d(TAG, "Final capabilities: $gnssCapabilities")
     }
 
@@ -380,7 +380,7 @@ class GnssNativeService : Service() {
      * Send event to Flutter
      */
     private fun sendEvent(eventType: String, data: Any?) {
-        Log.d(TAG, "Sending event: $eventType with data: $data")
+    //    Log.d(TAG, "Sending event: $eventType with data: $data")
         if (eventSink != null) {
             eventSink!!.success(mapOf(
                 "eventType" to eventType,
@@ -416,7 +416,7 @@ class GnssNativeService : Service() {
             satelliteData[svid] = satelliteInfo
         }
         
-        Log.d(TAG, "Sending satellite status from measurements: ${satelliteData.size} satellites")
+    //    Log.d(TAG, "Sending satellite status from measurements: ${satelliteData.size} satellites")
         sendEvent("satelliteStatus", getCurrentGnssStatusJson())
     }
 

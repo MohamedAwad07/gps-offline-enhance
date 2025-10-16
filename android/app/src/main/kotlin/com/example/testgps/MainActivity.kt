@@ -24,6 +24,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private var gnssNativeService: GnssNativeService? = null
+    private var fusedLocationService: FusedLocationService? = null
     private var serviceBound = false
     private lateinit var methodChannel: MethodChannel
     private lateinit var eventChannel: EventChannel
@@ -67,6 +68,10 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             "com.example.testgps/gnss_events"
         )
+        
+        // Initialize Fused Location Service
+        fusedLocationService = FusedLocationService()
+        fusedLocationService?.attachToEngine(flutterEngine, this)
         
         // Start and bind to the service
         startAndBindService()
@@ -123,6 +128,9 @@ class MainActivity : FlutterActivity() {
             unbindService(serviceConnection)
             serviceBound = false
         }
+        
+        fusedLocationService?.detachFromEngine()
+        fusedLocationService = null
         
         stopService(Intent(this, GnssNativeService::class.java))
     }
